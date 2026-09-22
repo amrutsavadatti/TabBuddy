@@ -27,6 +27,7 @@ import {
   GripVertical,
   HelpCircle,
   Keyboard,
+  LayoutGrid,
   MousePointerClick,
   Palette,
   Pin,
@@ -34,6 +35,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Shuffle,
   Square,
   Trash2,
   Upload,
@@ -114,32 +116,46 @@ const ONBOARDING_STEPS: {
     accent: VIBES[2]!.swatch,
   },
   {
+    icon: LayoutGrid,
+    title: 'Group by site',
+    description:
+      'One click in the popup groups a window\'s tabs by domain — every LinkedIn tab together, every YouTube tab together, and so on.',
+    accent: VIBES[3]!.swatch,
+  },
+  {
+    icon: Shuffle,
+    title: 'Sort tabs one by one',
+    description:
+      'A Tinder-style triage screen: drag or click each tab left to close it, or right to file it into a new or existing snapshot. Undo anytime with Cmd/Ctrl+Z.',
+    accent: VIBES[0]!.swatch,
+  },
+  {
     icon: Pin,
     title: 'Pin, search, and sort',
     description:
       'Pin your most-used windows to a fixed spot and drag to reorder them. Search by name, or sort the rest by usage or recency.',
-    accent: VIBES[3]!.swatch,
+    accent: VIBES[1]!.swatch,
   },
   {
     icon: CheckSquare,
     title: 'Select, export, import',
     description:
       'Use Select mode to bulk-export or delete snapshots. Export a single window to share it with a friend, or import one they send you.',
-    accent: VIBES[0]!.swatch,
+    accent: VIBES[2]!.swatch,
   },
   {
     icon: Eye,
     title: 'Hover to peek',
     description:
       'Hover any card to preview its tabs with favicons — everything else softly blurs to keep focus on what you\'re peeking at.',
-    accent: VIBES[1]!.swatch,
+    accent: VIBES[3]!.swatch,
   },
   {
     icon: Palette,
     title: 'Pick a vibe',
     description:
       'Click a colored swatch in the header to change the background gradient — Aurora, Sunset, Ocean, or Meadow.',
-    accent: VIBES[2]!.swatch,
+    accent: VIBES[0]!.swatch,
   },
   {
     icon: Keyboard,
