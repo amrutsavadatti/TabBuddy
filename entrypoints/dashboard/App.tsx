@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getSnapshots } from '@/lib/storage';
+import { restoreSnapshot } from '@/lib/restore';
 import type { Snapshot } from '@/lib/types';
 
 function App() {
@@ -18,7 +19,8 @@ function App() {
         <ul>
           {snapshots.map((snapshot) => (
             <li key={snapshot.id}>
-              {snapshot.name} — {snapshot.tabs.length} tabs
+              {snapshot.name} — {snapshot.tabs.length} tabs{' '}
+              <button onClick={() => restoreSnapshot(snapshot)}>Open</button>
             </li>
           ))}
         </ul>
