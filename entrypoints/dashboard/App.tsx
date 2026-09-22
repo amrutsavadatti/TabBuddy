@@ -24,8 +24,14 @@ import {
   Eye,
   EyeOff,
   GripVertical,
+  HelpCircle,
+  Keyboard,
+  MousePointerClick,
+  Palette,
   Pin,
   PinOff,
+  RefreshCw,
+  Save,
   Search,
   Square,
   Trash2,
@@ -46,6 +52,7 @@ import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { getDisplayOrder, SORT_OPTIONS, type SortOption } from '@/lib/sort';
 import { VIBES, getStoredVibe, setStoredVibe, type Vibe } from '@/lib/vibes';
 import { getHoverPeekEnabled, setHoverPeekEnabled } from '@/lib/peek';
+import { getHasSeenOnboarding, setHasSeenOnboarding } from '@/lib/onboarding';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
@@ -74,6 +81,165 @@ function formatDate(timestamp: number): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
+}
+
+const ONBOARDING_STEPS: {
+  icon: typeof Save;
+  title: string;
+  description: string;
+  accent: string;
+  shortcut?: boolean;
+}[] = [
+  {
+    icon: Save,
+    title: 'Save a window',
+    description:
+      'Click the toolbar icon, then "Save this window" to snapshot every open tab (with a fun auto-generated name, or your own).',
+    accent: VIBES[0]!.swatch,
+  },
+  {
+    icon: MousePointerClick,
+    title: 'Open with smart-detect',
+    description:
+      'Click "Open" on a snapshot to restore it. If its window is already open, TabBuddy focuses it instead of making a duplicate.',
+    accent: VIBES[1]!.swatch,
+  },
+  {
+    icon: RefreshCw,
+    title: 'Update in place',
+    description:
+      'Snapshots are frozen until you say otherwise. Add or close tabs in a linked window, then click Update to re-save.',
+    accent: VIBES[2]!.swatch,
+  },
+  {
+    icon: Pin,
+    title: 'Pin, search, and sort',
+    description:
+      'Pin your most-used windows to a fixed spot and drag to reorder them. Search by name, or sort the rest by usage or recency.',
+    accent: VIBES[3]!.swatch,
+  },
+  {
+    icon: CheckSquare,
+    title: 'Select, export, import',
+    description:
+      'Use Select mode to bulk-export or delete snapshots. Export a single window to share it with a friend, or import one they send you.',
+    accent: VIBES[0]!.swatch,
+  },
+  {
+    icon: Eye,
+    title: 'Hover to peek',
+    description:
+      'Hover any card to preview its tabs with favicons — everything else softly blurs to keep focus on what you\'re peeking at.',
+    accent: VIBES[1]!.swatch,
+  },
+  {
+    icon: Palette,
+    title: 'Pick a vibe',
+    description:
+      'Click a colored swatch in the header to change the background gradient — Aurora, Sunset, Ocean, or Meadow.',
+    accent: VIBES[2]!.swatch,
+  },
+  {
+    icon: Keyboard,
+    title: 'Keyboard shortcut',
+    description: 'Open (or jump to) this dashboard from anywhere in the browser.',
+    accent: VIBES[3]!.swatch,
+    shortcut: true,
+  },
+];
+
+function KeyCap({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="rounded-md border border-border bg-muted px-2.5 py-1.5 font-mono text-sm font-semibold shadow-sm">
+      {children}
+    </kbd>
+  );
+}
+
+function ShortcutBadge({ label, keys }: { label: string; keys: string[] }) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="flex gap-1">
+        {keys.map((k, i) => (
+          <KeyCap key={i}>{k}</KeyCap>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OnboardingDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    if (open) setStep(0);
+  }, [open]);
+
+  const total = ONBOARDING_STEPS.length;
+  const current = ONBOARDING_STEPS[step]!;
+  const Icon = current.icon;
+  const isLast = step === total - 1;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Welcome to TabBuddy 👋</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col items-center gap-4 py-2 text-center">
+          <div
+            className="flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-md"
+            style={{ backgroundImage: current.accent }}
+          >
+            <Icon size={28} />
+          </div>
+          <div>
+            <p className="text-base font-semibold">{current.title}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{current.description}</p>
+          </div>
+
+          {current.shortcut && (
+            <div className="flex gap-6 pt-1">
+              <ShortcutBadge label="Windows / Linux" keys={['Ctrl', 'Shift', 'K']} />
+              <ShortcutBadge label="Mac" keys={['⌘', 'Shift', 'K']} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1.5">
+            {ONBOARDING_STEPS.map((_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 w-1.5 rounded-full ${i === step ? 'bg-primary' : 'bg-muted'}`}
+              />
+            ))}
+          </div>
+          <div className="flex gap-2">
+            {step > 0 && (
+              <Button size="sm" variant="outline" onClick={() => setStep((s) => s - 1)}>
+                Back
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => (isLast ? onOpenChange(false) : setStep((s) => s + 1))}
+            >
+              {isLast ? 'Got it' : 'Next'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function SnapshotCard({
@@ -376,6 +542,7 @@ function App() {
   const [sortBy, setSortBy] = useState<SortOption>('mfu');
   const [hoverPeekEnabled, setHoverPeekEnabledState] = useState(true);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -387,6 +554,12 @@ function App() {
       document.documentElement.dataset.vibe = v;
     });
     getHoverPeekEnabled().then(setHoverPeekEnabledState);
+    getHasSeenOnboarding().then((seen) => {
+      if (!seen) {
+        setOnboardingOpen(true);
+        setHasSeenOnboarding(true);
+      }
+    });
   }, []);
 
   const handleVibeChange = (v: Vibe) => {
@@ -604,6 +777,15 @@ function App() {
             Hover peek
           </Button>
 
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setOnboardingOpen(true)}
+            title="Help / tutorial"
+          >
+            <HelpCircle size={16} />
+          </Button>
+
           {selectionMode ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-muted-foreground">
@@ -771,6 +953,7 @@ function App() {
           </section>
         </div>
       )}
+      <OnboardingDialog open={onboardingOpen} onOpenChange={setOnboardingOpen} />
     </div>
   );
 }
