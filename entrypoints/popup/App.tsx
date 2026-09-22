@@ -4,16 +4,19 @@ import { addSnapshot, getSnapshots } from '@/lib/storage';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { generateSnapshotName, getUniqueName } from '@/lib/names';
 import { openOrFocusDashboard, openTriageSession } from '@/lib/dashboard';
+import { autoGroupByDomain } from '@/lib/autoGroup';
+import { getStoredVibe } from '@/lib/vibes';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
-import { Shuffle } from 'lucide-react';
+import { LayoutGrid, Shuffle } from 'lucide-react';
 
 function App() {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'updating' | 'updated'>('idle');
   const [linkedSnapshot, setLinkedSnapshot] = useState<Snapshot | null>(null);
   const [nameInput, setNameInput] = useState(() => generateSnapshotName());
+  const [groupStatus, setGroupStatus] = useState<'idle' | 'grouping' | 'done'>('idle');
 
   useEffect(() => {
     (async () => {
@@ -22,6 +25,9 @@ function App() {
       const match = snapshots.find((s) => s.linkedWindowId === currentWindow.id);
       setLinkedSnapshot(match ?? null);
     })();
+    getStoredVibe().then((v) => {
+      document.documentElement.dataset.vibe = v;
+    });
   }, []);
 
   const openDashboard = () => {
@@ -33,6 +39,14 @@ function App() {
     if (currentWindow.id !== undefined) {
       await openTriageSession(currentWindow.id);
     }
+  };
+
+  const groupBySite = async () => {
+    const currentWindow = await browser.windows.getCurrent();
+    if (currentWindow.id === undefined) return;
+    setGroupStatus('grouping');
+    await autoGroupByDomain(currentWindow.id);
+    setGroupStatus('done');
   };
 
   const saveWindow = async () => {
@@ -91,6 +105,10 @@ function App() {
       </Button>
       <Button size="sm" variant="outline" onClick={sortTabs}>
         <Shuffle size={14} className="mr-1" /> Sort tabs
+      </Button>
+      <Button size="sm" variant="outline" onClick={groupBySite} disabled={groupStatus === 'grouping'}>
+        <LayoutGrid size={14} className="mr-1" />
+        {groupStatus === 'done' ? 'Grouped!' : 'Group by site'}
       </Button>
     </div>
   );
