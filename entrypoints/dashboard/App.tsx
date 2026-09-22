@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import dashboardIcon from '@/assets/dashboard-header-icon.png';
 import { TriageView } from './TriageView';
 import {
   DndContext,
@@ -799,7 +800,10 @@ function App() {
   return (
     <div className="mx-auto max-w-6xl p-6 md:p-8">
       <div className={`mb-6 flex flex-wrap items-center justify-between gap-3 ${chromeBlurClass}`}>
-        <h1 className="text-2xl font-semibold">TabBuddy Dashboard</h1>
+        <div className="flex items-center gap-2">
+          <img src={dashboardIcon} alt="" className="h-12 w-12" />
+          <h1 className="text-2xl font-semibold">TabBuddy Dashboard</h1>
+        </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             {VIBES.map((v) => (
