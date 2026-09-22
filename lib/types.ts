@@ -18,6 +18,7 @@ export interface Snapshot {
   tabs: SnapshotTab[];
   tabGroups: SnapshotTabGroup[];
   linkedWindowId: number | null;
+  usageCount: number;
   createdAt: number;
   updatedAt: number;
 }

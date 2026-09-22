@@ -76,11 +76,15 @@ export async function restoreSnapshot(snapshot: Snapshot): Promise<number> {
   if (snapshot.linkedWindowId !== null) {
     const focused = await focusExistingWindow(snapshot.linkedWindowId);
     if (focused) {
+      await updateSnapshot(snapshot.id, { usageCount: snapshot.usageCount + 1 });
       return snapshot.linkedWindowId;
     }
   }
 
   const windowId = await openInNewWindow(snapshot);
-  await updateSnapshot(snapshot.id, { linkedWindowId: windowId });
+  await updateSnapshot(snapshot.id, {
+    linkedWindowId: windowId,
+    usageCount: snapshot.usageCount + 1,
+  });
   return windowId;
 }

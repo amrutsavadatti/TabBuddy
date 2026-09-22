@@ -41,6 +41,7 @@ export async function createSnapshotFromCurrentWindow(
     tabs,
     tabGroups,
     linkedWindowId: null,
+    usageCount: 0,
     createdAt: now,
     updatedAt: now,
   };

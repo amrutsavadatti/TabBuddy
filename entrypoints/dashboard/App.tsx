@@ -21,8 +21,8 @@ function App() {
   };
 
   const handleOpen = async (snapshot: Snapshot) => {
-    const windowId = await restoreSnapshot(snapshot);
-    patchSnapshot(snapshot.id, { linkedWindowId: windowId });
+    await restoreSnapshot(snapshot);
+    getSnapshots().then(setSnapshots);
   };
 
   const handleUpdate = async (snapshot: Snapshot) => {
@@ -71,6 +71,10 @@ function App() {
     patchSnapshot(snapshot.id, { tabs });
   };
 
+  const sortedSnapshots = [...snapshots].sort(
+    (a, b) => b.usageCount - a.usageCount,
+  );
+
   return (
     <>
       <h1>TabBuddy Dashboard</h1>
@@ -78,7 +82,7 @@ function App() {
         <p>No snapshots saved yet.</p>
       ) : (
         <ul>
-          {snapshots.map((snapshot) => (
+          {sortedSnapshots.map((snapshot) => (
             <li key={snapshot.id}>
               {renamingId === snapshot.id ? (
                 <>
@@ -91,7 +95,8 @@ function App() {
                 </>
               ) : (
                 <>
-                  {snapshot.name} — {snapshot.tabs.length} tabs{' '}
+                  {snapshot.name} — {snapshot.tabs.length} tabs — opened{' '}
+                  {snapshot.usageCount}×{' '}
                   <button onClick={() => startRename(snapshot)}>Rename</button>
                 </>
               )}{' '}
