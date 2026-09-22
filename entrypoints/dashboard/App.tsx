@@ -506,6 +506,7 @@ function App() {
   const toggleSelectionMode = () => {
     setSelectionMode((prev) => !prev);
     setSelectedIds(new Set());
+    setHoveredId(null);
   };
 
   const toggleSelect = (id: string) => {
@@ -566,8 +567,8 @@ function App() {
     selectionMode,
     selected: selectedIds.has(snapshot.id),
     onToggleSelect: () => toggleSelect(snapshot.id),
-    hoverPeek: hoverPeekEnabled,
-    isBlurred: hoveredId !== null && hoveredId !== snapshot.id,
+    hoverPeek: hoverPeekEnabled && !selectionMode,
+    isBlurred: !selectionMode && hoveredId !== null && hoveredId !== snapshot.id,
     onHoverStart: () => setHoveredId(snapshot.id),
     onHoverEnd: () => setHoveredId(null),
   });
@@ -595,10 +596,9 @@ function App() {
 
           <Button
             size="sm"
-            variant="outline"
+            variant={hoverPeekEnabled ? 'default' : 'outline'}
             onClick={toggleHoverPeek}
             title="Hover over a card to peek its tabs"
-            className={hoverPeekEnabled ? 'text-primary' : undefined}
           >
             {hoverPeekEnabled ? <Eye size={14} className="mr-1" /> : <EyeOff size={14} className="mr-1" />}
             Hover peek

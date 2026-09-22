@@ -24,7 +24,7 @@ export const VIBES: { id: Vibe; label: string; swatch: string }[] = [
 ];
 
 const VIBE_STORAGE_KEY = 'uiVibe';
-const DEFAULT_VIBE: Vibe = 'aurora';
+const DEFAULT_VIBE: Vibe = 'meadow';
 
 export async function getStoredVibe(): Promise<Vibe> {
   const result = await browser.storage.local.get(VIBE_STORAGE_KEY);
