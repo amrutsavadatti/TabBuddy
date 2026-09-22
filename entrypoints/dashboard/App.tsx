@@ -21,6 +21,8 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  Eye,
+  EyeOff,
   GripVertical,
   Pin,
   PinOff,
@@ -43,6 +45,7 @@ import { restoreSnapshot } from '@/lib/restore';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { getDisplayOrder, SORT_OPTIONS, type SortOption } from '@/lib/sort';
 import { VIBES, getStoredVibe, setStoredVibe, type Vibe } from '@/lib/vibes';
+import { getHoverPeekEnabled, setHoverPeekEnabled } from '@/lib/peek';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
@@ -91,6 +94,10 @@ function SnapshotCard({
   selectionMode,
   selected,
   onToggleSelect,
+  hoverPeek,
+  isBlurred,
+  onHoverStart,
+  onHoverEnd,
 }: {
   snapshot: Snapshot;
   dragHandle?: React.ReactNode;
@@ -109,10 +116,21 @@ function SnapshotCard({
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
+  hoverPeek?: boolean;
+  isBlurred?: boolean;
+  onHoverStart?: () => void;
+  onHoverEnd?: () => void;
 }) {
   const accent = getAccentColor(snapshot.name);
 
   return (
+    <div
+      className={`group relative transition-[filter,transform] duration-200 ${
+        isBlurred ? 'z-0 scale-[0.99] blur-sm' : 'z-30'
+      }`}
+      onMouseEnter={hoverPeek ? onHoverStart : undefined}
+      onMouseLeave={hoverPeek ? onHoverEnd : undefined}
+    >
     <div
       className="flex flex-col gap-3 overflow-hidden rounded-xl border-t-4 border-border bg-card p-4 text-card-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
       style={{ borderTopColor: accent }}
@@ -292,6 +310,31 @@ function SnapshotCard({
       </div>
 
     </div>
+    {hoverPeek && (
+      <div className="pointer-events-none absolute inset-x-0 top-full z-20 mt-2 hidden max-h-64 overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-lg group-hover:block">
+        <p className="mb-2 text-xs font-medium text-muted-foreground">
+          {snapshot.tabs.length} tabs
+        </p>
+        <ul className="flex flex-col gap-1.5">
+          {snapshot.tabs.slice(0, 8).map((tab, index) => (
+            <li key={index} className="flex items-center gap-2 text-xs">
+              {tab.favIconUrl ? (
+                <img src={tab.favIconUrl} alt="" className="h-4 w-4 shrink-0 rounded-sm" />
+              ) : (
+                <div className="h-4 w-4 shrink-0 rounded-sm bg-muted" />
+              )}
+              <span className="truncate">{tab.title || tab.url}</span>
+            </li>
+          ))}
+          {snapshot.tabs.length > 8 && (
+            <li className="text-xs text-muted-foreground">
+              +{snapshot.tabs.length - 8} more
+            </li>
+          )}
+        </ul>
+      </div>
+    )}
+    </div>
   );
 }
 
@@ -331,6 +374,8 @@ function App() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('mfu');
+  const [hoverPeekEnabled, setHoverPeekEnabledState] = useState(true);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -341,12 +386,21 @@ function App() {
       setVibe(v);
       document.documentElement.dataset.vibe = v;
     });
+    getHoverPeekEnabled().then(setHoverPeekEnabledState);
   }, []);
 
   const handleVibeChange = (v: Vibe) => {
     setVibe(v);
     document.documentElement.dataset.vibe = v;
     setStoredVibe(v);
+  };
+
+  const toggleHoverPeek = () => {
+    setHoverPeekEnabledState((prev) => {
+      const next = !prev;
+      setHoverPeekEnabled(next);
+      return next;
+    });
   };
 
   const patchSnapshot = (id: string, changes: Partial<Snapshot>) => {
@@ -512,11 +566,17 @@ function App() {
     selectionMode,
     selected: selectedIds.has(snapshot.id),
     onToggleSelect: () => toggleSelect(snapshot.id),
+    hoverPeek: hoverPeekEnabled,
+    isBlurred: hoveredId !== null && hoveredId !== snapshot.id,
+    onHoverStart: () => setHoveredId(snapshot.id),
+    onHoverEnd: () => setHoveredId(null),
   });
+
+  const chromeBlurClass = `transition-[filter] duration-200 ${hoveredId ? 'blur-sm' : ''}`;
 
   return (
     <div className="mx-auto max-w-6xl p-6 md:p-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className={`mb-6 flex flex-wrap items-center justify-between gap-3 ${chromeBlurClass}`}>
         <h1 className="text-2xl font-semibold">TabBuddy Dashboard</h1>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
@@ -532,6 +592,17 @@ function App() {
               />
             ))}
           </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={toggleHoverPeek}
+            title="Hover over a card to peek its tabs"
+            className={hoverPeekEnabled ? 'text-primary' : undefined}
+          >
+            {hoverPeekEnabled ? <Eye size={14} className="mr-1" /> : <EyeOff size={14} className="mr-1" />}
+            Hover peek
+          </Button>
 
           {selectionMode ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -605,7 +676,7 @@ function App() {
       </div>
 
       {snapshots.length > 0 && (
-        <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className={`mb-6 flex flex-wrap items-center gap-3 ${chromeBlurClass}`}>
           <div className="relative min-w-[220px] flex-1">
             <Search
               size={15}
@@ -657,7 +728,7 @@ function App() {
         <div className="flex flex-col gap-8">
           {pinned.length > 0 && (
             <section>
-              <h2 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+              <h2 className={`mb-3 flex items-center gap-1.5 text-sm font-medium text-muted-foreground ${chromeBlurClass}`}>
                 <Pin size={14} /> Pinned
               </h2>
               <DndContext
@@ -689,7 +760,7 @@ function App() {
             </section>
           )}
           <section>
-            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+            <h2 className={`mb-3 text-sm font-medium text-muted-foreground ${chromeBlurClass}`}>
               All snapshots
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
