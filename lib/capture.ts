@@ -1,13 +1,12 @@
 import type { Snapshot, SnapshotTab, SnapshotTabGroup } from './types';
 
-async function captureCurrentWindow(): Promise<{
+export async function captureWindowTabs(windowId: number): Promise<{
   tabs: SnapshotTab[];
   tabGroups: SnapshotTabGroup[];
 }> {
-  const currentWindow = await browser.windows.getCurrent();
   const [tabs, groups] = await Promise.all([
-    browser.tabs.query({ windowId: currentWindow.id }),
-    browser.tabGroups.query({ windowId: currentWindow.id }),
+    browser.tabs.query({ windowId }),
+    browser.tabGroups.query({ windowId }),
   ]);
 
   const groupIdToIndex = new Map<number, number>();
@@ -33,7 +32,8 @@ async function captureCurrentWindow(): Promise<{
 export async function createSnapshotFromCurrentWindow(
   name: string,
 ): Promise<Snapshot> {
-  const { tabs, tabGroups } = await captureCurrentWindow();
+  const currentWindow = await browser.windows.getCurrent();
+  const { tabs, tabGroups } = await captureWindowTabs(currentWindow.id!);
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
