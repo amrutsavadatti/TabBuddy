@@ -28,6 +28,7 @@ import { deleteSnapshot, getSnapshots, updateSnapshot } from '@/lib/storage';
 import { restoreSnapshot } from '@/lib/restore';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { getDisplayOrder } from '@/lib/sort';
+import { VIBES, getStoredVibe, setStoredVibe, type Vibe } from '@/lib/vibes';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
@@ -295,13 +296,24 @@ function App() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [vibe, setVibe] = useState<Vibe | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
   useEffect(() => {
     getSnapshots().then(setSnapshots);
+    getStoredVibe().then((v) => {
+      setVibe(v);
+      document.documentElement.dataset.vibe = v;
+    });
   }, []);
+
+  const handleVibeChange = (v: Vibe) => {
+    setVibe(v);
+    document.documentElement.dataset.vibe = v;
+    setStoredVibe(v);
+  };
 
   const patchSnapshot = (id: string, changes: Partial<Snapshot>) => {
     setSnapshots((prev) =>
@@ -414,7 +426,22 @@ function App() {
 
   return (
     <div className="mx-auto max-w-6xl p-6 md:p-8">
-      <h1 className="mb-6 text-2xl font-semibold">TabBuddy Dashboard</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">TabBuddy Dashboard</h1>
+        <div className="flex items-center gap-1.5">
+          {VIBES.map((v) => (
+            <button
+              key={v.id}
+              title={v.label}
+              onClick={() => handleVibeChange(v.id)}
+              className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
+                vibe === v.id ? 'border-foreground' : 'border-transparent'
+              }`}
+              style={{ backgroundImage: v.swatch }}
+            />
+          ))}
+        </div>
+      </div>
       {snapshots.length === 0 ? (
         <p className="text-muted-foreground">No snapshots saved yet.</p>
       ) : (
