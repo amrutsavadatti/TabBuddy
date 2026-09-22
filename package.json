@@ -1,6 +1,7 @@
 {
   "name": "tabbuddy",
   "description": "Snapshot and restore browser window tab groups.",
+  "license": "MIT",
   "private": true,
   "version": "0.0.0",
   "type": "module",
