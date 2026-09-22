@@ -24,6 +24,7 @@ import {
   GripVertical,
   Pin,
   PinOff,
+  Search,
   Square,
   Trash2,
   Upload,
@@ -40,7 +41,7 @@ import {
 import { downloadSnapshotsAsFile, parseImportFile } from '@/lib/exportImport';
 import { restoreSnapshot } from '@/lib/restore';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
-import { getDisplayOrder } from '@/lib/sort';
+import { getDisplayOrder, SORT_OPTIONS, type SortOption } from '@/lib/sort';
 import { VIBES, getStoredVibe, setStoredVibe, type Vibe } from '@/lib/vibes';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
@@ -328,6 +329,8 @@ function App() {
   const [vibe, setVibe] = useState<Vibe | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('mfu');
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -400,7 +403,10 @@ function App() {
     patchSnapshot(snapshot.id, { tabs });
   };
 
-  const { pinned, unpinned } = getDisplayOrder(snapshots);
+  const filteredSnapshots = snapshots.filter((s) =>
+    s.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+  );
+  const { pinned, unpinned } = getDisplayOrder(filteredSnapshots, sortBy);
 
   const togglePin = async (snapshot: Snapshot) => {
     if (snapshot.pinned) {
@@ -408,7 +414,7 @@ function App() {
       patchSnapshot(snapshot.id, { pinned: false, pinnedPosition: null });
       return;
     }
-    const pinnedPosition = pinned.length;
+    const pinnedPosition = snapshots.filter((s) => s.pinned).length;
     await updateSnapshot(snapshot.id, { pinned: true, pinnedPosition });
     patchSnapshot(snapshot.id, { pinned: true, pinnedPosition });
   };
@@ -597,8 +603,56 @@ function App() {
           )}
         </div>
       </div>
+
+      {snapshots.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[220px] flex-1">
+            <Search
+              size={15}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search snapshots..."
+              className="w-full rounded-full border border-border bg-card py-2 pl-9 pr-4 text-sm shadow-sm outline-none transition-shadow focus:shadow-md focus:ring-2 focus:ring-primary/40"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <div className="relative">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="appearance-none rounded-full border border-border bg-card py-2 pl-4 pr-9 text-sm shadow-sm outline-none transition-shadow focus:shadow-md focus:ring-2 focus:ring-primary/40"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={14}
+              className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+          </div>
+        </div>
+      )}
+
       {snapshots.length === 0 ? (
         <p className="text-muted-foreground">No snapshots saved yet.</p>
+      ) : filteredSnapshots.length === 0 ? (
+        <p className="text-muted-foreground">
+          No snapshots match "{searchQuery}".
+        </p>
       ) : (
         <div className="flex flex-col gap-8">
           {pinned.length > 0 && (
