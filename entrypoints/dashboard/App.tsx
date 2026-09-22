@@ -1,15 +1,54 @@
 import { useEffect, useState } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { deleteSnapshot, getSnapshots, updateSnapshot } from '@/lib/storage';
 import { restoreSnapshot } from '@/lib/restore';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { getDisplayOrder } from '@/lib/sort';
 import type { Snapshot } from '@/lib/types';
 
+function SortablePinnedItem({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id });
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+    >
+      <span {...attributes} {...listeners} style={{ cursor: 'grab' }}>
+        ⠿
+      </span>{' '}
+      {children}
+    </li>
+  );
+}
+
 function App() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const sensors = useSensors(useSensor(PointerSensor));
 
   useEffect(() => {
     getSnapshots().then(setSnapshots);
@@ -85,8 +124,29 @@ function App() {
     patchSnapshot(snapshot.id, { pinned: true, pinnedPosition });
   };
 
-  const renderSnapshot = (snapshot: Snapshot) => (
-    <li key={snapshot.id}>
+  const handlePinnedDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = pinned.findIndex((s) => s.id === active.id);
+    const newIndex = pinned.findIndex((s) => s.id === over.id);
+    const reordered = arrayMove(pinned, oldIndex, newIndex);
+
+    await Promise.all(
+      reordered.map((snapshot, index) =>
+        updateSnapshot(snapshot.id, { pinnedPosition: index }),
+      ),
+    );
+    setSnapshots((prev) =>
+      prev.map((s) => {
+        const newPosition = reordered.findIndex((r) => r.id === s.id);
+        return newPosition === -1 ? s : { ...s, pinnedPosition: newPosition };
+      }),
+    );
+  };
+
+  const renderSnapshotContent = (snapshot: Snapshot) => (
+    <>
       {renamingId === snapshot.id ? (
         <>
           <input
@@ -138,7 +198,7 @@ function App() {
           ))}
         </ol>
       )}
-    </li>
+    </>
   );
 
   return (
@@ -151,11 +211,32 @@ function App() {
           {pinned.length > 0 && (
             <>
               <h2>📌 Pinned</h2>
-              <ul>{pinned.map(renderSnapshot)}</ul>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handlePinnedDragEnd}
+              >
+                <SortableContext
+                  items={pinned.map((s) => s.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <ul>
+                    {pinned.map((snapshot) => (
+                      <SortablePinnedItem key={snapshot.id} id={snapshot.id}>
+                        {renderSnapshotContent(snapshot)}
+                      </SortablePinnedItem>
+                    ))}
+                  </ul>
+                </SortableContext>
+              </DndContext>
             </>
           )}
           <h2>All snapshots</h2>
-          <ul>{unpinned.map(renderSnapshot)}</ul>
+          <ul>
+            {unpinned.map((snapshot) => (
+              <li key={snapshot.id}>{renderSnapshotContent(snapshot)}</li>
+            ))}
+          </ul>
         </>
       )}
     </>
