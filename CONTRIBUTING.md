@@ -30,13 +30,50 @@ See [README.md](./README.md) for more detail on the build/load steps.
 built as a sequence of vertical slices — useful context for how features
 were scoped and tested.
 
+## Testing
+
+`lib/` has a unit test suite (Vitest + WXT's `fakeBrowser`, an in-memory
+mock of the `chrome`/`browser` APIs) covering the framework-agnostic
+logic: storage, capture/restore/update, sorting, naming, export/import,
+auto-grouping, and the small UI-preference helpers (vibes, hover-peek,
+onboarding).
+
+```bash
+npm test         # run once
+npm run test:watch   # watch mode while developing
+```
+
+Two things worth knowing if you're adding tests that touch the `browser`
+API:
+
+- `fakeBrowser` doesn't implement every API. Notably `tabGroups.*`,
+  `sessions.*`, and `tabs.group`/`ungroup` are stubs that throw if called
+  for real — mock them directly with `vi.spyOn` instead (see
+  `lib/capture.test.ts` or `lib/restore.test.ts` for examples). Because
+  these are WebExtension APIs with overloaded (promise + callback)
+  signatures, `vi.spyOn` sometimes infers the wrong overload — casting the
+  spied object to `any` (`vi.spyOn(browser.tabGroups as any, 'update')`)
+  sidesteps it.
+- `fakeBrowser`'s fidelity isn't perfect: e.g. `windows.get()` resolves
+  `undefined` for a missing window instead of rejecting like real Chrome
+  does. Where our code relies on real Chrome's rejection behavior, mock
+  it explicitly rather than trusting the fake's default.
+- `test/setup.ts` resets `fakeBrowser` state and restores all mocks before
+  every test — don't skip that if you add a new setup file.
+
+Entrypoints (`entrypoints/popup/App.tsx`, `entrypoints/dashboard/App.tsx`,
+`TriageView.tsx`) aren't unit tested — they're UI/drag-and-drop heavy and
+better covered by manually loading the extension and clicking through the
+change.
+
 ## Before submitting a PR
 
 - `npm run compile` should pass with no type errors.
+- `npm test` should pass.
 - `npm run build` should succeed.
 - Manually test the change by loading the built extension in a real
-  browser — this project doesn't have an automated test suite yet, so
-  manual verification is the bar.
+  browser, especially anything UI-facing that isn't covered by the unit
+  tests.
 - Keep changes scoped. A small, focused PR is much easier to review than
   one that touches unrelated areas.
 
