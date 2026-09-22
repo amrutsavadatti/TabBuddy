@@ -21,3 +21,15 @@ function pick<T>(list: T[]): T {
 export function generateSnapshotName(): string {
   return `${pick(ADJECTIVES)}-${pick(ADJECTIVES)}-${pick(NOUNS)}`;
 }
+
+/** Appends a numeric suffix (e.g. "name (2)") if the name already exists. */
+export function getUniqueName(desiredName: string, existingNames: string[]): string {
+  const taken = new Set(existingNames);
+  if (!taken.has(desiredName)) return desiredName;
+
+  let n = 2;
+  while (taken.has(`${desiredName} (${n})`)) {
+    n++;
+  }
+  return `${desiredName} (${n})`;
+}

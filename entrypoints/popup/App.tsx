@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { createSnapshotFromCurrentWindow } from '@/lib/capture';
 import { addSnapshot, getSnapshots } from '@/lib/storage';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
-import { generateSnapshotName } from '@/lib/names';
+import { generateSnapshotName, getUniqueName } from '@/lib/names';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,9 @@ function App() {
 
   const saveWindow = async () => {
     setStatus('saving');
-    const name = nameInput.trim() || generateSnapshotName();
+    const existing = await getSnapshots();
+    const desiredName = nameInput.trim() || generateSnapshotName();
+    const name = getUniqueName(desiredName, existing.map((s) => s.name));
     const snapshot = await createSnapshotFromCurrentWindow(name);
     await addSnapshot(snapshot);
     setStatus('saved');

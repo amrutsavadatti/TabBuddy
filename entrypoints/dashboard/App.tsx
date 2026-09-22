@@ -17,14 +17,27 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  CheckSquare,
   ChevronDown,
   ChevronUp,
+  Download,
   GripVertical,
   Pin,
   PinOff,
+  Square,
   Trash2,
+  Upload,
+  X,
 } from 'lucide-react';
-import { deleteSnapshot, getSnapshots, updateSnapshot } from '@/lib/storage';
+import {
+  addSnapshots,
+  deleteSnapshot,
+  deleteSnapshots,
+  getSnapshots,
+  updateSnapshot,
+  updateSnapshots,
+} from '@/lib/storage';
+import { downloadSnapshotsAsFile, parseImportFile } from '@/lib/exportImport';
 import { restoreSnapshot } from '@/lib/restore';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { getDisplayOrder } from '@/lib/sort';
@@ -71,8 +84,12 @@ function SnapshotCard({
   onUpdate,
   onDelete,
   onTogglePin,
+  onExport,
   onRemoveTab,
   onMoveTab,
+  selectionMode,
+  selected,
+  onToggleSelect,
 }: {
   snapshot: Snapshot;
   dragHandle?: React.ReactNode;
@@ -85,17 +102,26 @@ function SnapshotCard({
   onUpdate: () => void;
   onDelete: () => void;
   onTogglePin: () => void;
+  onExport: () => void;
   onRemoveTab: (index: number) => void;
   onMoveTab: (index: number, direction: -1 | 1) => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const accent = getAccentColor(snapshot.name);
 
   return (
     <div
-      className="flex flex-col gap-3 rounded-xl border-t-4 border-border bg-card p-4 text-card-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+      className="flex flex-col gap-3 overflow-hidden rounded-xl border-t-4 border-border bg-card p-4 text-card-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
       style={{ borderTopColor: accent }}
     >
       <div className="flex items-start justify-between gap-2">
+        {selectionMode && (
+          <button onClick={onToggleSelect} className="text-primary" title="Select">
+            {selected ? <CheckSquare size={18} /> : <Square size={18} />}
+          </button>
+        )}
         {renaming ? (
           <div className="flex flex-1 gap-2">
             <input
@@ -129,7 +155,7 @@ function SnapshotCard({
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2">
           <Button size="sm" onClick={onOpen}>
             Open
@@ -138,7 +164,7 @@ function SnapshotCard({
             Update
           </Button>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1">
           <Button
             size="icon"
             variant="ghost"
@@ -147,6 +173,9 @@ function SnapshotCard({
             className={snapshot.pinned ? 'text-primary' : undefined}
           >
             {snapshot.pinned ? <PinOff size={16} /> : <Pin size={16} />}
+          </Button>
+          <Button size="icon" variant="ghost" onClick={onExport} title="Export">
+            <Download size={16} />
           </Button>
           <Dialog>
             <DialogTrigger asChild>
@@ -297,6 +326,8 @@ function App() {
   const [renameValue, setRenameValue] = useState('');
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [vibe, setVibe] = useState<Vibe | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -404,9 +435,58 @@ function App() {
       }),
     );
 
-    reordered.forEach((snapshot, index) => {
-      updateSnapshot(snapshot.id, { pinnedPosition: index }).catch(console.error);
+    updateSnapshots(
+      reordered.map((snapshot, index) => ({
+        id: snapshot.id,
+        changes: { pinnedPosition: index },
+      })),
+    ).catch(console.error);
+  };
+
+  const toggleSelectionMode = () => {
+    setSelectionMode((prev) => !prev);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
     });
+  };
+
+  const selectAllOrNone = () => {
+    setSelectedIds((prev) =>
+      prev.size === snapshots.length ? new Set() : new Set(snapshots.map((s) => s.id)),
+    );
+  };
+
+  const exportSelected = () => {
+    const toExport = snapshots.filter((s) => selectedIds.has(s.id));
+    if (toExport.length === 0) return;
+    downloadSnapshotsAsFile(toExport);
+    toggleSelectionMode();
+  };
+
+  const deleteSelected = async () => {
+    await deleteSnapshots([...selectedIds]);
+    setSnapshots((prev) => prev.filter((s) => !selectedIds.has(s.id)));
+    toggleSelectionMode();
+  };
+
+  const handleImportFile = async (file: File) => {
+    try {
+      const imported = await parseImportFile(file, snapshots.map((s) => s.name));
+      await addSnapshots(imported);
+      getSnapshots().then(setSnapshots);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to import file.');
+    }
   };
 
   const cardProps = (snapshot: Snapshot) => ({
@@ -420,26 +500,101 @@ function App() {
     onUpdate: () => handleUpdate(snapshot),
     onDelete: () => handleDelete(snapshot),
     onTogglePin: () => togglePin(snapshot),
+    onExport: () => downloadSnapshotsAsFile([snapshot]),
     onRemoveTab: (index: number) => removeTab(snapshot, index),
     onMoveTab: (index: number, direction: -1 | 1) => moveTab(snapshot, index, direction),
+    selectionMode,
+    selected: selectedIds.has(snapshot.id),
+    onToggleSelect: () => toggleSelect(snapshot.id),
   });
 
   return (
     <div className="mx-auto max-w-6xl p-6 md:p-8">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">TabBuddy Dashboard</h1>
-        <div className="flex items-center gap-1.5">
-          {VIBES.map((v) => (
-            <button
-              key={v.id}
-              title={v.label}
-              onClick={() => handleVibeChange(v.id)}
-              className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
-                vibe === v.id ? 'border-foreground' : 'border-transparent'
-              }`}
-              style={{ backgroundImage: v.swatch }}
-            />
-          ))}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            {VIBES.map((v) => (
+              <button
+                key={v.id}
+                title={v.label}
+                onClick={() => handleVibeChange(v.id)}
+                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
+                  vibe === v.id ? 'border-foreground' : 'border-transparent'
+                }`}
+                style={{ backgroundImage: v.swatch }}
+              />
+            ))}
+          </div>
+
+          {selectionMode ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                {selectedIds.size} selected
+              </span>
+              <Button size="sm" variant="outline" onClick={selectAllOrNone}>
+                {selectedIds.size === snapshots.length ? 'Deselect all' : 'Select all'}
+              </Button>
+              <Button size="sm" onClick={exportSelected} disabled={selectedIds.size === 0}>
+                <Download size={14} className="mr-1" /> Export selected
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="destructive" disabled={selectedIds.size === 0}>
+                    <Trash2 size={14} className="mr-1" /> Delete selected
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      Delete {selectedIds.size} snapshot{selectedIds.size === 1 ? '' : 's'}?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This can't be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={deleteSelected}>Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Button size="sm" variant="outline" onClick={toggleSelectionMode}>
+                <X size={14} className="mr-1" /> Cancel
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={toggleSelectionMode}>
+                <CheckSquare size={14} className="mr-1" /> Select
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => downloadSnapshotsAsFile(snapshots)}
+                disabled={snapshots.length === 0}
+              >
+                <Download size={14} className="mr-1" /> Export all
+              </Button>
+              <label>
+                <Button size="sm" variant="outline" asChild>
+                  <span>
+                    <Upload size={14} className="mr-1" /> Import
+                  </span>
+                </Button>
+                <input
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImportFile(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+          )}
         </div>
       </div>
       {snapshots.length === 0 ? (
