@@ -1,3 +1,4 @@
+import type { Browser } from 'wxt/browser';
 import type { Snapshot } from './types';
 import { updateSnapshot } from './storage';
 
@@ -9,6 +10,37 @@ async function focusExistingWindow(windowId: number): Promise<boolean> {
   }
   await browser.windows.update(windowId, { focused: true });
   return true;
+}
+
+async function recreateTabGroups(
+  createdTabIds: (number | undefined)[],
+  snapshot: Snapshot,
+  windowId: number,
+): Promise<void> {
+  const tabIdsByGroupIndex = new Map<number, number[]>();
+
+  createdTabIds.forEach((tabId, index) => {
+    const groupIndex = snapshot.tabs[index]?.groupIndex;
+    if (groupIndex === null || groupIndex === undefined || tabId === undefined) {
+      return;
+    }
+    const tabIds = tabIdsByGroupIndex.get(groupIndex) ?? [];
+    tabIds.push(tabId);
+    tabIdsByGroupIndex.set(groupIndex, tabIds);
+  });
+
+  for (const [groupIndex, tabIds] of tabIdsByGroupIndex) {
+    const groupMeta = snapshot.tabGroups[groupIndex];
+    if (!groupMeta || tabIds.length === 0) continue;
+    const newGroupId = await browser.tabs.group({
+      tabIds: tabIds as [number, ...number[]],
+      createProperties: { windowId },
+    });
+    await browser.tabGroups.update(newGroupId, {
+      title: groupMeta.title,
+      color: groupMeta.color as Browser.tabGroups.Color,
+    });
+  }
 }
 
 async function openInNewWindow(snapshot: Snapshot): Promise<number> {
@@ -29,6 +61,12 @@ async function openInNewWindow(snapshot: Snapshot): Promise<number> {
       }
       return Promise.resolve();
     }),
+  );
+
+  await recreateTabGroups(
+    createdTabs.map((tab) => tab.id),
+    snapshot,
+    createdWindow.id,
   );
 
   return createdWindow.id;
