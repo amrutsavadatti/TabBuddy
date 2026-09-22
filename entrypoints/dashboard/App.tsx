@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { deleteSnapshot, getSnapshots, updateSnapshot } from '@/lib/storage';
 import { restoreSnapshot } from '@/lib/restore';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
+import { getDisplayOrder } from '@/lib/sort';
 import type { Snapshot } from '@/lib/types';
 
 function App() {
@@ -71,8 +72,73 @@ function App() {
     patchSnapshot(snapshot.id, { tabs });
   };
 
-  const sortedSnapshots = [...snapshots].sort(
-    (a, b) => b.usageCount - a.usageCount,
+  const { pinned, unpinned } = getDisplayOrder(snapshots);
+
+  const togglePin = async (snapshot: Snapshot) => {
+    if (snapshot.pinned) {
+      await updateSnapshot(snapshot.id, { pinned: false, pinnedPosition: null });
+      patchSnapshot(snapshot.id, { pinned: false, pinnedPosition: null });
+      return;
+    }
+    const pinnedPosition = pinned.length;
+    await updateSnapshot(snapshot.id, { pinned: true, pinnedPosition });
+    patchSnapshot(snapshot.id, { pinned: true, pinnedPosition });
+  };
+
+  const renderSnapshot = (snapshot: Snapshot) => (
+    <li key={snapshot.id}>
+      {renamingId === snapshot.id ? (
+        <>
+          <input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            autoFocus
+          />
+          <button onClick={() => confirmRename(snapshot)}>Save name</button>
+        </>
+      ) : (
+        <>
+          {snapshot.name} — {snapshot.tabs.length} tabs — opened{' '}
+          {snapshot.usageCount}×{' '}
+          <button onClick={() => startRename(snapshot)}>Rename</button>
+        </>
+      )}{' '}
+      <button onClick={() => handleOpen(snapshot)}>Open</button>{' '}
+      <button onClick={() => handleUpdate(snapshot)}>Update</button>{' '}
+      <button onClick={() => handleDelete(snapshot)}>Delete</button>{' '}
+      <button onClick={() => togglePin(snapshot)}>
+        {snapshot.pinned ? '📌 Unpin' : 'Pin'}
+      </button>{' '}
+      <button
+        onClick={() =>
+          setExpandedId(expandedId === snapshot.id ? null : snapshot.id)
+        }
+      >
+        {expandedId === snapshot.id ? 'Hide tabs' : 'Show tabs'}
+      </button>
+      {expandedId === snapshot.id && (
+        <ol>
+          {snapshot.tabs.map((tab, index) => (
+            <li key={`${snapshot.id}-${index}`}>
+              {tab.title || tab.url}{' '}
+              <button
+                onClick={() => moveTab(snapshot, index, -1)}
+                disabled={index === 0}
+              >
+                ↑
+              </button>
+              <button
+                onClick={() => moveTab(snapshot, index, 1)}
+                disabled={index === snapshot.tabs.length - 1}
+              >
+                ↓
+              </button>
+              <button onClick={() => removeTab(snapshot, index)}>Remove</button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </li>
   );
 
   return (
@@ -81,62 +147,16 @@ function App() {
       {snapshots.length === 0 ? (
         <p>No snapshots saved yet.</p>
       ) : (
-        <ul>
-          {sortedSnapshots.map((snapshot) => (
-            <li key={snapshot.id}>
-              {renamingId === snapshot.id ? (
-                <>
-                  <input
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    autoFocus
-                  />
-                  <button onClick={() => confirmRename(snapshot)}>Save name</button>
-                </>
-              ) : (
-                <>
-                  {snapshot.name} — {snapshot.tabs.length} tabs — opened{' '}
-                  {snapshot.usageCount}×{' '}
-                  <button onClick={() => startRename(snapshot)}>Rename</button>
-                </>
-              )}{' '}
-              <button onClick={() => handleOpen(snapshot)}>Open</button>{' '}
-              <button onClick={() => handleUpdate(snapshot)}>Update</button>{' '}
-              <button onClick={() => handleDelete(snapshot)}>Delete</button>{' '}
-              <button
-                onClick={() =>
-                  setExpandedId(expandedId === snapshot.id ? null : snapshot.id)
-                }
-              >
-                {expandedId === snapshot.id ? 'Hide tabs' : 'Show tabs'}
-              </button>
-              {expandedId === snapshot.id && (
-                <ol>
-                  {snapshot.tabs.map((tab, index) => (
-                    <li key={`${snapshot.id}-${index}`}>
-                      {tab.title || tab.url}{' '}
-                      <button
-                        onClick={() => moveTab(snapshot, index, -1)}
-                        disabled={index === 0}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        onClick={() => moveTab(snapshot, index, 1)}
-                        disabled={index === snapshot.tabs.length - 1}
-                      >
-                        ↓
-                      </button>
-                      <button onClick={() => removeTab(snapshot, index)}>
-                        Remove
-                      </button>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </li>
-          ))}
-        </ul>
+        <>
+          {pinned.length > 0 && (
+            <>
+              <h2>📌 Pinned</h2>
+              <ul>{pinned.map(renderSnapshot)}</ul>
+            </>
+          )}
+          <h2>All snapshots</h2>
+          <ul>{unpinned.map(renderSnapshot)}</ul>
+        </>
       )}
     </>
   );

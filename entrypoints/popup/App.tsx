@@ -50,16 +50,18 @@ function App() {
           </button>
         </div>
       )}
-      <div>
-        <input
-          value={nameInput}
-          onChange={(e) => setNameInput(e.target.value)}
-          disabled={status === 'saving'}
-        />
-        <button onClick={saveWindow} disabled={status === 'saving'}>
-          {status === 'saved' ? 'Saved!' : 'Save this window'}
-        </button>
-      </div>
+      {!linkedSnapshot && (
+        <div>
+          <input
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            disabled={status === 'saving'}
+          />
+          <button onClick={saveWindow} disabled={status === 'saving'}>
+            {status === 'saved' ? 'Saved!' : 'Save this window'}
+          </button>
+        </div>
+      )}
       <button onClick={openDashboard}>Open dashboard</button>
     </>
   );

@@ -19,6 +19,8 @@ export interface Snapshot {
   tabGroups: SnapshotTabGroup[];
   linkedWindowId: number | null;
   usageCount: number;
+  pinned: boolean;
+  pinnedPosition: number | null;
   createdAt: number;
   updatedAt: number;
 }
