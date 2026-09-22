@@ -1,8 +1,28 @@
+import { useEffect, useState } from 'react';
+import { getSnapshots } from '@/lib/storage';
+import type { Snapshot } from '@/lib/types';
+
 function App() {
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+
+  useEffect(() => {
+    getSnapshots().then(setSnapshots);
+  }, []);
+
   return (
     <>
       <h1>TabBuddy Dashboard</h1>
-      <p>Saved snapshots will appear here.</p>
+      {snapshots.length === 0 ? (
+        <p>No snapshots saved yet.</p>
+      ) : (
+        <ul>
+          {snapshots.map((snapshot) => (
+            <li key={snapshot.id}>
+              {snapshot.name} — {snapshot.tabs.length} tabs
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   );
 }
