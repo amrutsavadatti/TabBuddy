@@ -35,7 +35,8 @@ and get them back with one click.
   content scripts. See [PRD.md](./PRD.md) for the full permission
   rationale.
 
-See [PRD.md](./PRD.md) for the full product spec and
+See [USER_GUIDE.md](./USER_GUIDE.md) for a full walkthrough of every
+feature. See [PRD.md](./PRD.md) for the full product spec and
 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) for how the project was built,
 slice by slice.
 
