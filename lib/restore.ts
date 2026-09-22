@@ -1,6 +1,17 @@
 import type { Snapshot } from './types';
+import { updateSnapshot } from './storage';
 
-export async function restoreSnapshot(snapshot: Snapshot): Promise<number> {
+async function focusExistingWindow(windowId: number): Promise<boolean> {
+  try {
+    await browser.windows.get(windowId);
+  } catch {
+    return false;
+  }
+  await browser.windows.update(windowId, { focused: true });
+  return true;
+}
+
+async function openInNewWindow(snapshot: Snapshot): Promise<number> {
   const urls = snapshot.tabs.map((tab) => tab.url);
   const createdWindow = await browser.windows.create(
     urls.length ? { url: urls } : {},
@@ -21,4 +32,17 @@ export async function restoreSnapshot(snapshot: Snapshot): Promise<number> {
   );
 
   return createdWindow.id;
+}
+
+export async function restoreSnapshot(snapshot: Snapshot): Promise<number> {
+  if (snapshot.linkedWindowId !== null) {
+    const focused = await focusExistingWindow(snapshot.linkedWindowId);
+    if (focused) {
+      return snapshot.linkedWindowId;
+    }
+  }
+
+  const windowId = await openInNewWindow(snapshot);
+  await updateSnapshot(snapshot.id, { linkedWindowId: windowId });
+  return windowId;
 }

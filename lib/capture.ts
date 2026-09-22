@@ -19,6 +19,7 @@ export async function createSnapshotFromCurrentWindow(
     id: crypto.randomUUID(),
     name,
     tabs,
+    linkedWindowId: null,
     createdAt: now,
     updatedAt: now,
   };

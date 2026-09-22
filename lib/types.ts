@@ -9,6 +9,7 @@ export interface Snapshot {
   id: string;
   name: string;
   tabs: SnapshotTab[];
+  linkedWindowId: number | null;
   createdAt: number;
   updatedAt: number;
 }

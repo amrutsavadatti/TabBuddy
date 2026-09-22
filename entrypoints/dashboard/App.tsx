@@ -10,6 +10,13 @@ function App() {
     getSnapshots().then(setSnapshots);
   }, []);
 
+  const handleOpen = async (snapshot: Snapshot) => {
+    const windowId = await restoreSnapshot(snapshot);
+    setSnapshots((prev) =>
+      prev.map((s) => (s.id === snapshot.id ? { ...s, linkedWindowId: windowId } : s)),
+    );
+  };
+
   return (
     <>
       <h1>TabBuddy Dashboard</h1>
@@ -20,7 +27,7 @@ function App() {
           {snapshots.map((snapshot) => (
             <li key={snapshot.id}>
               {snapshot.name} — {snapshot.tabs.length} tabs{' '}
-              <button onClick={() => restoreSnapshot(snapshot)}>Open</button>
+              <button onClick={() => handleOpen(snapshot)}>Open</button>
             </li>
           ))}
         </ul>
