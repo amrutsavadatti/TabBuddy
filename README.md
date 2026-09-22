@@ -20,8 +20,16 @@ and get them back with one click.
 - **Dashboard management.** Rename, reorder tabs, remove individual tabs,
   pin snapshots to a fixed position, and delete — all without needing the
   window open.
-- **Most-frequently-used sorting.** Unpinned snapshots automatically sort
-  by how often you open them.
+- **Search, sort, and pin.** Search snapshots by name, sort by most
+  frequently used / recently updated / recently created, and pin your
+  most important ones to a fixed position at the top.
+- **Export / import.** Back up a single snapshot, a selection, or
+  everything as a JSON file — or share one with a friend.
+- **Hover to peek.** Hover a snapshot to preview its tabs (with a focus
+  blur on everything else) without opening it.
+- **Keyboard shortcut.** `Ctrl+Shift+K` (`Cmd+Shift+K` on Mac) opens the
+  dashboard from anywhere — or focuses it if it's already open.
+  Customizable at `chrome://extensions/shortcuts`.
 - **Privacy-respecting by design.** Runs entirely on-device
   (`chrome.storage.local`), no network calls, no host permissions, no
   content scripts. See [PRD.md](./PRD.md) for the full permission

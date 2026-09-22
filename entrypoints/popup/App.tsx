@@ -3,6 +3,7 @@ import { createSnapshotFromCurrentWindow } from '@/lib/capture';
 import { addSnapshot, getSnapshots } from '@/lib/storage';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { generateSnapshotName, getUniqueName } from '@/lib/names';
+import { openOrFocusDashboard } from '@/lib/dashboard';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ function App() {
   }, []);
 
   const openDashboard = () => {
-    browser.tabs.create({ url: browser.runtime.getURL('/dashboard.html') });
+    openOrFocusDashboard();
   };
 
   const saveWindow = async () => {

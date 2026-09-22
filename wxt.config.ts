@@ -8,6 +8,15 @@ export default defineConfig({
     name: 'TabBuddy',
     description: 'Snapshot and restore browser window tab groups.',
     permissions: ['tabs', 'tabGroups', 'windows', 'storage'],
+    commands: {
+      'open-dashboard': {
+        suggested_key: {
+          default: 'Ctrl+Shift+K',
+          mac: 'Command+Shift+K',
+        },
+        description: 'Open TabBuddy dashboard',
+      },
+    },
   },
   vite: () => ({
     plugins: [tailwindcss()],
