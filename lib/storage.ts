@@ -13,6 +13,12 @@ export async function addSnapshot(snapshot: Snapshot): Promise<void> {
   await browser.storage.local.set({ [SNAPSHOTS_KEY]: snapshots });
 }
 
+export async function deleteSnapshot(id: string): Promise<void> {
+  const snapshots = await getSnapshots();
+  const remaining = snapshots.filter((snapshot) => snapshot.id !== id);
+  await browser.storage.local.set({ [SNAPSHOTS_KEY]: remaining });
+}
+
 export async function updateSnapshot(
   id: string,
   changes: Partial<Snapshot>,

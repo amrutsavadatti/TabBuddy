@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSnapshots } from '@/lib/storage';
+import { deleteSnapshot, getSnapshots } from '@/lib/storage';
 import { restoreSnapshot } from '@/lib/restore';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import type { Snapshot } from '@/lib/types';
@@ -27,6 +27,14 @@ function App() {
     getSnapshots().then(setSnapshots);
   };
 
+  const handleDelete = async (snapshot: Snapshot) => {
+    if (!confirm(`Delete "${snapshot.name}"? This can't be undone.`)) {
+      return;
+    }
+    await deleteSnapshot(snapshot.id);
+    setSnapshots((prev) => prev.filter((s) => s.id !== snapshot.id));
+  };
+
   return (
     <>
       <h1>TabBuddy Dashboard</h1>
@@ -38,7 +46,8 @@ function App() {
             <li key={snapshot.id}>
               {snapshot.name} — {snapshot.tabs.length} tabs{' '}
               <button onClick={() => handleOpen(snapshot)}>Open</button>{' '}
-              <button onClick={() => handleUpdate(snapshot)}>Update</button>
+              <button onClick={() => handleUpdate(snapshot)}>Update</button>{' '}
+              <button onClick={() => handleDelete(snapshot)}>Delete</button>
             </li>
           ))}
         </ul>
