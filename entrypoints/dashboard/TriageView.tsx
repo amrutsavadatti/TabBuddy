@@ -68,7 +68,7 @@ function DropTile({
       ref={setNodeRef}
       onClick={onClick}
       style={style}
-      className={`w-full rounded-xl border-t-4 border-border bg-card p-3 text-center text-sm font-medium shadow-sm transition-all duration-150 hover:shadow-md ${
+      className={`w-full rounded-xl border-t-4 border-border bg-card p-3 text-center text-sm font-medium shadow-sm transition-all duration-150 hover:py-6 hover:shadow-md ${
         isOver ? 'z-10 scale-110 border-primary shadow-xl ring-2 ring-primary' : 'scale-100'
       }`}
     >
@@ -100,11 +100,11 @@ function DraggableCard({ tab }: { tab: TriageTab }) {
     id: 'triage-card',
   });
   const { over } = useDndContext();
-  const isOverDelete = over?.id === 'delete';
+  const isOverTarget = over?.id !== undefined;
 
   const style: React.CSSProperties = transform
     ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0) rotate(${transform.x / 18}deg) scale(${isOverDelete ? 0.8 : 1})`,
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0) rotate(${transform.x / 18}deg) scale(${isOverTarget ? 0.8 : 1})`,
       }
     : {};
 
@@ -116,7 +116,7 @@ function DraggableCard({ tab }: { tab: TriageTab }) {
       style={style}
       className={`relative flex w-full max-w-md cursor-grab touch-none select-none flex-col items-center gap-4 rounded-2xl border border-border bg-card p-10 text-center shadow-lg transition-[opacity,box-shadow] active:cursor-grabbing ${
         isDragging ? 'shadow-2xl' : 'hover:shadow-xl'
-      } ${isOverDelete ? 'opacity-40' : ''}`}
+      } ${isOverTarget ? 'opacity-40' : ''}`}
     >
       {tab.favIconUrl ? (
         <img src={tab.favIconUrl} alt="" className="h-12 w-12 rounded-lg" />
@@ -382,7 +382,7 @@ export function TriageView({
             </div>
           </div>
 
-          <div className="flex w-[22%] min-w-[220px] flex-col gap-3 overflow-y-auto border-l border-border bg-muted/30 p-4">
+          <div className="relative z-20 flex w-[22%] min-w-[220px] flex-col gap-3 overflow-y-auto border-l border-border bg-muted/30 p-4">
             <DropTile id="new-snapshot" onClick={handleDropToNew}>
               <Plus size={16} className="mx-auto mb-1" />
               {sessionSnapshotName ? `Add to "${sessionSnapshotName}"` : 'New snapshot'}
