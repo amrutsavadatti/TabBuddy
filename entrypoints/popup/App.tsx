@@ -4,6 +4,8 @@ import { addSnapshot, getSnapshots } from '@/lib/storage';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { generateSnapshotName } from '@/lib/names';
 import type { Snapshot } from '@/lib/types';
+import { getAccentColor } from '@/lib/color';
+import { Button } from '@/components/ui/button';
 
 function App() {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -40,30 +42,43 @@ function App() {
   };
 
   return (
-    <>
-      <h1>TabBuddy</h1>
+    <div className="flex w-72 flex-col gap-3 p-4">
+      <h1 className="text-base font-semibold">TabBuddy</h1>
+
       {linkedSnapshot && (
-        <div>
-          <p>{linkedSnapshot.name}</p>
-          <button onClick={updateLinkedSnapshot} disabled={updateStatus === 'updating'}>
+        <div
+          className="flex flex-col gap-2 rounded-xl border-t-4 border-border bg-card p-3"
+          style={{ borderTopColor: getAccentColor(linkedSnapshot.name) }}
+        >
+          <p className="truncate text-base font-semibold">{linkedSnapshot.name}</p>
+          <Button
+            size="sm"
+            onClick={updateLinkedSnapshot}
+            disabled={updateStatus === 'updating'}
+          >
             {updateStatus === 'updated' ? 'Updated!' : 'Update'}
-          </button>
+          </Button>
         </div>
       )}
+
       {!linkedSnapshot && (
-        <div>
+        <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
           <input
+            className="rounded-lg border border-border bg-background px-2 py-1 text-sm"
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
             disabled={status === 'saving'}
           />
-          <button onClick={saveWindow} disabled={status === 'saving'}>
+          <Button size="sm" onClick={saveWindow} disabled={status === 'saving'}>
             {status === 'saved' ? 'Saved!' : 'Save this window'}
-          </button>
+          </Button>
         </div>
       )}
-      <button onClick={openDashboard}>Open dashboard</button>
-    </>
+
+      <Button size="sm" variant="outline" onClick={openDashboard}>
+        Open dashboard
+      </Button>
+    </div>
   );
 }
 
