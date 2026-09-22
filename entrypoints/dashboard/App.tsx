@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TriageView } from './TriageView';
 import {
   DndContext,
   DragOverlay,
@@ -55,6 +56,7 @@ import { getHoverPeekEnabled, setHoverPeekEnabled } from '@/lib/peek';
 import { getHasSeenOnboarding, setHasSeenOnboarding } from '@/lib/onboarding';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
+import { formatRelativeTime } from '@/lib/relativeTime';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -338,6 +340,18 @@ function SnapshotCard({
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
           opened {snapshot.usageCount}×
         </span>
+        <span
+          className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+          title={formatDate(snapshot.createdAt)}
+        >
+          created {formatRelativeTime(snapshot.createdAt)}
+        </span>
+        <span
+          className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+          title={formatDate(snapshot.updatedAt)}
+        >
+          updated {formatRelativeTime(snapshot.updatedAt)}
+        </span>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -543,6 +557,11 @@ function App() {
   const [hoverPeekEnabled, setHoverPeekEnabledState] = useState(true);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [triageWindowId, setTriageWindowId] = useState<number | null>(() => {
+    const raw = new URLSearchParams(window.location.search).get('triage');
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  });
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -747,6 +766,19 @@ function App() {
   });
 
   const chromeBlurClass = `transition-[filter] duration-200 ${hoveredId ? 'blur-sm' : ''}`;
+
+  if (triageWindowId !== null) {
+    return (
+      <TriageView
+        windowId={triageWindowId}
+        onExit={() => {
+          setTriageWindowId(null);
+          window.history.replaceState({}, '', '/dashboard.html');
+          getSnapshots().then(setSnapshots);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl p-6 md:p-8">

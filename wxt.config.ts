@@ -7,7 +7,7 @@ export default defineConfig({
   manifest: {
     name: 'TabBuddy',
     description: 'Snapshot and restore browser window tab groups.',
-    permissions: ['tabs', 'tabGroups', 'windows', 'storage'],
+    permissions: ['tabs', 'tabGroups', 'windows', 'storage', 'sessions'],
     commands: {
       'open-dashboard': {
         suggested_key: {

@@ -3,10 +3,11 @@ import { createSnapshotFromCurrentWindow } from '@/lib/capture';
 import { addSnapshot, getSnapshots } from '@/lib/storage';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { generateSnapshotName, getUniqueName } from '@/lib/names';
-import { openOrFocusDashboard } from '@/lib/dashboard';
+import { openOrFocusDashboard, openTriageSession } from '@/lib/dashboard';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
+import { Shuffle } from 'lucide-react';
 
 function App() {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -25,6 +26,13 @@ function App() {
 
   const openDashboard = () => {
     openOrFocusDashboard();
+  };
+
+  const sortTabs = async () => {
+    const currentWindow = await browser.windows.getCurrent();
+    if (currentWindow.id !== undefined) {
+      await openTriageSession(currentWindow.id);
+    }
   };
 
   const saveWindow = async () => {
@@ -80,6 +88,9 @@ function App() {
 
       <Button size="sm" variant="outline" onClick={openDashboard}>
         Open dashboard
+      </Button>
+      <Button size="sm" variant="outline" onClick={sortTabs}>
+        <Shuffle size={14} className="mr-1" /> Sort tabs
       </Button>
     </div>
   );

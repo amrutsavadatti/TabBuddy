@@ -13,3 +13,8 @@ export async function openOrFocusDashboard(): Promise<void> {
 
   await browser.tabs.create({ url: dashboardUrl });
 }
+
+export async function openTriageSession(windowId: number): Promise<void> {
+  const url = browser.runtime.getURL(`/dashboard.html?triage=${windowId}`);
+  await browser.tabs.create({ url });
+}
