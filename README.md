@@ -27,6 +27,10 @@ and get them back with one click.
   everything as a JSON file — or share one with a friend.
 - **Hover to peek.** Hover a snapshot to preview its tabs (with a focus
   blur on everything else) without opening it.
+- **Categories.** Tag snapshots with any number of categories, then switch
+  the dashboard to **Categories** view to see each category as a stack of
+  cards. Click a stack to open it, drag cards onto other categories, or
+  bulk-tag a selection. Categories travel with exports and imports.
 - **Lazy-loaded restore.** Opening a big snapshot loads only the first
   tab; the rest open as light placeholders showing `domain – page title`
   and the full URL, and load when you switch to them. Toggle it from the

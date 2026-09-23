@@ -5,7 +5,9 @@ const SNAPSHOTS_KEY = 'snapshots';
 
 export async function getSnapshots(): Promise<Snapshot[]> {
   const result = await browser.storage.local.get(SNAPSHOTS_KEY);
-  return (result[SNAPSHOTS_KEY] as Snapshot[] | undefined) ?? [];
+  const stored = (result[SNAPSHOTS_KEY] as Snapshot[] | undefined) ?? [];
+  // Snapshots saved before categories existed have no categoryIds.
+  return stored.map((s) => ({ ...s, categoryIds: s.categoryIds ?? [] }));
 }
 
 export async function addSnapshot(snapshot: Snapshot): Promise<void> {

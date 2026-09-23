@@ -27,6 +27,7 @@ async function getOrCreateArchivedSnapshot(): Promise<Snapshot> {
     tabs: [],
     tabGroups: [],
     linkedWindowId: null,
+    categoryIds: [],
     usageCount: 0,
     pinned: true,
     pinnedPosition: all.filter((s) => s.pinned).length,

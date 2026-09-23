@@ -48,6 +48,7 @@ export async function createSnapshotFromCurrentWindow(
     tabs,
     tabGroups,
     linkedWindowId: currentWindow.id ?? null,
+    categoryIds: [],
     usageCount: 0,
     pinned: false,
     pinnedPosition: null,

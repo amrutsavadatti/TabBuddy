@@ -23,6 +23,7 @@ export function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     tabs: [makeTab()],
     tabGroups: [],
     linkedWindowId: null,
+    categoryIds: [],
     usageCount: 0,
     pinned: false,
     pinnedPosition: null,

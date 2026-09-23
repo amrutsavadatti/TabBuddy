@@ -14,6 +14,72 @@ Each slice ends with:
 
 ---
 
+## Track C — Categories (done)
+
+**Idea:** users create categories and tag snapshots with them. A snapshot can
+belong to several categories (tags) or none. The dashboard gets a toggle:
+**Simple** (today's grid, the default) and **Categories** (each category is
+a stack of cards; clicking a stack drills in to that category's cards).
+
+**Rules:** deleting a category only removes the tag from snapshots, never
+the snapshots. Dragging a card onto a stack *adds* that category; removing
+from a stack is an explicit action. Snapshots with no tags appear in an
+"Uncategorized" stack. Pinned stays a global shortcut at the top; the
+reserved Archived snapshot stays outside categories. The view choice is
+remembered between sessions.
+
+### ✅ Slice C1 — Category storage and snapshot tags
+**Build:** `lib/categories.ts` — categories stored in `storage.local`
+(id, name, optional color); create (unique names), rename, recolor, delete
+(strips the tag from every snapshot). Snapshots gain `categoryIds`, with
+existing data treated as untagged. Add/remove/set a snapshot's categories;
+the Archived snapshot cannot be tagged. Pure selectors for "snapshots in a
+category" and "uncategorized". No UI yet.
+**Test:** Unit tests for every function, including legacy snapshots without
+`categoryIds` and deleting a category that snapshots use.
+**Commit:** `feat: add categories and snapshot tags to storage`
+
+### ✅ Slice C2 — Assign from the card, chips in Simple view
+**Build:** A "Categories" menu on each card to tick/untick categories and
+create a new one inline. Cards show up to three colored category chips
+("+2" beyond that).
+**Test:** Create a category, tag a snapshot, reload, confirm the chip
+persists; untag it.
+**Commit:** `feat: assign snapshots to categories from the dashboard`
+
+### ✅ Slice C3 — View toggle and Categories view
+**Build:** A Simple | Categories toggle beside search/sort, remembered
+between sessions. Categories view shows each category as a layered, slightly
+tilted stack (name, count, first snapshot names, accent color) plus an
+"Uncategorized" stack. Manage categories: rename, recolor, delete.
+**Test:** Toggle views, reload and confirm the choice sticks; counts match
+the tags.
+**Commit:** `feat: add categories view with card stacks`
+
+### ✅ Slice C4 — Drill-in
+**Build:** Clicking a stack opens that category: back header
+("← All / Job Hunt") and its cards, with a fan-out animation from the stack.
+Cards keep every normal action; "Remove from this category" is added.
+**Test:** Drill into a stack, use Open/Update inside it, go back.
+**Commit:** `feat: drill into a category to see its snapshots`
+
+### ✅ Slice C5 — Drag to file and bulk add
+**Build:** While browsing a category, a strip of the other categories acts as
+drop targets: drag a card (by its grip handle) onto one to add that category
+(it never removes existing ones). In Select mode, "Add to category" tags all
+selected cards at once.
+**Test:** Drag a card onto two different stacks and confirm it appears in
+both; bulk-tag a selection.
+**Commit:** `feat: drag cards onto stacks and bulk-add to categories`
+
+### ✅ Slice C6 — Export/import, docs, onboarding
+**Build:** Exports include categories; imports match them by name and
+create missing ones. README, USER_GUIDE, and an onboarding step.
+**Test:** Export, delete a category, import, confirm tags return.
+**Commit:** `docs: document categories and include them in export/import`
+
+---
+
 ## Track A — Protect saved tabs from nudges (done)
 
 **Problem:** the Tab Hoarder Nudge can close tabs that belong to an open

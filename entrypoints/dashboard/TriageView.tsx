@@ -213,6 +213,7 @@ export function TriageView({
           tabs: [snapshotTab],
           tabGroups: [],
           linkedWindowId: null,
+          categoryIds: [],
           usageCount: 0,
           pinned: false,
           pinnedPosition: null,

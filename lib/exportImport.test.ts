@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeSnapshot } from '@/test/factories';
-import { downloadSnapshotsAsFile, parseImportFile } from './exportImport';
+import { downloadSnapshotsAsFile, parseImportFile, parseImportWithCategories } from './exportImport';
+import type { Category } from './types';
 
 function fileFrom(content: unknown): File {
   return new File([JSON.stringify(content)], 'import.json', {
@@ -109,5 +110,95 @@ describe('parseImportFile', () => {
   it('throws on malformed JSON', async () => {
     const badFile = new File(['{ not json'], 'import.json');
     await expect(parseImportFile(badFile)).rejects.toThrow();
+  });
+});
+
+const category = (id: string, name: string, color: string | null = null): Category => ({
+  id,
+  name,
+  color,
+  createdAt: 1,
+});
+
+describe('exporting categories', () => {
+  it('includes only the categories the exported snapshots use', async () => {
+    let blob: Blob | undefined;
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn().mockImplementation((b: Blob) => {
+        blob = b;
+        return 'blob:x';
+      }),
+      revokeObjectURL: vi.fn(),
+    });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    downloadSnapshotsAsFile(
+      [makeSnapshot({ categoryIds: ['a'] })],
+      [category('a', 'Work'), category('b', 'Unused')],
+    );
+
+    const payload = JSON.parse(await blob!.text());
+    expect(payload.categories.map((c: Category) => c.name)).toEqual(['Work']);
+
+    vi.unstubAllGlobals();
+    clickSpy.mockRestore();
+  });
+});
+
+describe('importing categories', () => {
+  const fileWith = (categories: unknown, snapshots: unknown[]) =>
+    fileFrom({ version: 1, snapshots, categories });
+
+  it('maps categories to existing ones by name, ignoring case', async () => {
+    const existing = [category('local-1', 'work')];
+    const file = fileWith(
+      [category('src-1', 'Work')],
+      [makeSnapshot({ categoryIds: ['src-1'] })],
+    );
+
+    const { snapshots, newCategories } = await parseImportWithCategories(file, [], existing);
+
+    expect(newCategories).toEqual([]);
+    expect(snapshots[0]!.categoryIds).toEqual(['local-1']);
+  });
+
+  it('creates categories that do not exist yet, keeping their color', async () => {
+    const file = fileWith(
+      [category('src-1', 'Research', '#ff0000')],
+      [makeSnapshot({ categoryIds: ['src-1'] })],
+    );
+
+    const { snapshots, newCategories } = await parseImportWithCategories(file);
+
+    expect(newCategories).toHaveLength(1);
+    expect(newCategories[0]).toMatchObject({ name: 'Research', color: '#ff0000' });
+    expect(snapshots[0]!.categoryIds).toEqual([newCategories[0]!.id]);
+  });
+
+  it('creates a shared category only once across snapshots', async () => {
+    const file = fileWith(
+      [category('src-1', 'Shared')],
+      [makeSnapshot({ categoryIds: ['src-1'] }), makeSnapshot({ categoryIds: ['src-1'] })],
+    );
+
+    const { snapshots, newCategories } = await parseImportWithCategories(file);
+
+    expect(newCategories).toHaveLength(1);
+    expect(snapshots[0]!.categoryIds).toEqual(snapshots[1]!.categoryIds);
+  });
+
+  it('drops category ids the file does not describe', async () => {
+    const file = fileWith([], [makeSnapshot({ categoryIds: ['mystery'] })]);
+    const { snapshots, newCategories } = await parseImportWithCategories(file);
+    expect(newCategories).toEqual([]);
+    expect(snapshots[0]!.categoryIds).toEqual([]);
+  });
+
+  it('still imports older files that have no categories at all', async () => {
+    const legacy = { ...makeSnapshot() } as Partial<ReturnType<typeof makeSnapshot>>;
+    delete legacy.categoryIds;
+    const { snapshots } = await parseImportWithCategories(fileFrom({ snapshots: [legacy] }));
+    expect(snapshots[0]!.categoryIds).toEqual([]);
   });
 });

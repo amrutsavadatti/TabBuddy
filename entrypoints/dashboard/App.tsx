@@ -5,8 +5,10 @@ import {
   DndContext,
   DragOverlay,
   closestCenter,
+  pointerWithin,
   PointerSensor,
   useSensor,
+  useDraggable,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
@@ -19,15 +21,18 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  ArrowLeft,
   Bell,
   CheckSquare,
   ChevronDown,
   ChevronUp,
   Download,
   Eye,
+  FolderMinus,
   GripVertical,
   Keyboard,
   LayoutGrid,
+  Layers,
   Leaf,
   Lock,
   MousePointerClick,
@@ -51,7 +56,7 @@ import {
   updateSnapshot,
   updateSnapshots,
 } from '@/lib/storage';
-import { downloadSnapshotsAsFile, parseImportFile } from '@/lib/exportImport';
+import { downloadSnapshotsAsFile, parseImportWithCategories } from '@/lib/exportImport';
 import { restoreSnapshot } from '@/lib/restore';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { getDisplayOrder, SORT_OPTIONS, type SortOption } from '@/lib/sort';
@@ -70,8 +75,26 @@ import {
 } from '@/lib/nudgeSettings';
 import { NudgeSettingsDialog } from './NudgeSettingsDialog';
 import { SettingsBar } from './SettingsBar';
+import { CategoryChips, CategoryPicker } from './CategoryPicker';
+import { BulkCategoryDialog, CATEGORY_DROP_PREFIX, CategoryDropStrip } from './CategoryTools';
+import { CategoriesView, UNCATEGORIZED_COLOR, UNCATEGORIZED_ID } from './CategoriesView';
+import { getDashboardView, setDashboardView, type DashboardView } from '@/lib/dashboardView';
+import {
+  addCategories,
+  addCategory,
+  addSnapshotsToCategories,
+  addSnapshotToCategory,
+  deleteCategory,
+  getCategories,
+  getCategoryColor,
+  getSnapshotsInCategory,
+  getUncategorizedSnapshots,
+  renameCategory,
+  setCategoryColor,
+  setSnapshotCategories,
+} from '@/lib/categories';
 import { getHasSeenOnboarding, setHasSeenOnboarding } from '@/lib/onboarding';
-import type { Snapshot } from '@/lib/types';
+import type { Category, Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { ARCHIVED_ACCENT_COLOR, isArchivedSnapshot } from '@/lib/archive';
 import { formatRelativeTime } from '@/lib/relativeTime';
@@ -165,6 +188,13 @@ const ONBOARDING_STEPS: {
     description:
       'Hover any card to preview its tabs with favicons — everything else softly blurs to keep focus on what you\'re peeking at.',
     accent: VIBES[3]!.swatch,
+  },
+  {
+    icon: Layers,
+    title: 'Categories',
+    description:
+      'Tag snapshots with the tag icon on a card, then switch to Categories view to see each category as a stack. Click a stack to open it, and drag cards between categories.',
+    accent: VIBES[0]!.swatch,
   },
   {
     icon: Leaf,
@@ -305,6 +335,10 @@ function SnapshotCard({
   onExport,
   onRemoveTab,
   onMoveTab,
+  categories,
+  onToggleCategory,
+  onCreateCategory,
+  onRemoveFromCategory,
   selectionMode,
   selected,
   onToggleSelect,
@@ -327,6 +361,10 @@ function SnapshotCard({
   onExport: () => void;
   onRemoveTab: (index: number) => void;
   onMoveTab: (index: number, direction: -1 | 1) => void;
+  categories: Category[];
+  onToggleCategory: (categoryId: string) => void;
+  onCreateCategory: (name: string) => Promise<void>;
+  onRemoveFromCategory?: () => void;
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -412,6 +450,12 @@ function SnapshotCard({
         </span>
       </div>
 
+      {isArchived ? (
+        <div className="h-6" aria-hidden />
+      ) : (
+        <CategoryChips snapshot={snapshot} categories={categories} />
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2">
           <Button size="sm" onClick={onOpen}>
@@ -431,6 +475,24 @@ function SnapshotCard({
           >
             {snapshot.pinned ? <PinOff size={16} /> : <Pin size={16} />}
           </Button>
+          {!isArchived && (
+            <CategoryPicker
+              snapshot={snapshot}
+              categories={categories}
+              onToggle={onToggleCategory}
+              onCreate={onCreateCategory}
+            />
+          )}
+          {onRemoveFromCategory && (
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={onRemoveFromCategory}
+              title="Remove from this category"
+            >
+              <FolderMinus size={16} />
+            </Button>
+          )}
           <Button size="icon" variant="ghost" onClick={onExport} title="Export">
             <Download size={16} />
           </Button>
@@ -588,6 +650,29 @@ function SnapshotCard({
   );
 }
 
+function DraggableDrillCard(props: React.ComponentProps<typeof SnapshotCard>) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: props.snapshot.id,
+  });
+  return (
+    <div ref={setNodeRef} className={isDragging ? 'opacity-40' : undefined}>
+      <SnapshotCard
+        {...props}
+        dragHandle={
+          <span
+            {...attributes}
+            {...listeners}
+            title="Drag onto a category"
+            className="cursor-grab select-none px-1 text-muted-foreground touch-none"
+          >
+            <GripVertical size={16} />
+          </span>
+        }
+      />
+    </div>
+  );
+}
+
 function SortablePinnedCard(props: React.ComponentProps<typeof SnapshotCard>) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: props.snapshot.id });
@@ -633,6 +718,11 @@ function App() {
   const [nudgeStaleMinutes, setNudgeStaleMinutesState] = useState(DEFAULT_NUDGE_STALE_MINUTES);
   const [nudgeDialogOpen, setNudgeDialogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [view, setView] = useState<DashboardView>('simple');
+  const [openCategoryId, setOpenCategoryId] = useState<string | null>(null);
+  const [drillDragId, setDrillDragId] = useState<string | null>(null);
+  const [dropNotice, setDropNotice] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [triageWindowId, setTriageWindowId] = useState<number | null>(() => {
@@ -651,6 +741,8 @@ function App() {
       document.documentElement.dataset.vibe = v;
     });
     getHoverPeekEnabled().then(setHoverPeekEnabledState);
+    getCategories().then(setCategories);
+    getDashboardView().then(setView);
     getLazyRestoreEnabled().then(setLazyRestoreEnabledState);
     getNudgeEnabled().then(setNudgeEnabledState);
     getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
@@ -832,7 +924,7 @@ function App() {
   const exportSelected = () => {
     const toExport = snapshots.filter((s) => selectedIds.has(s.id));
     if (toExport.length === 0) return;
-    downloadSnapshotsAsFile(toExport);
+    downloadSnapshotsAsFile(toExport, categories);
     toggleSelectionMode();
   };
 
@@ -847,12 +939,109 @@ function App() {
 
   const handleImportFile = async (file: File) => {
     try {
-      const imported = await parseImportFile(file, snapshots.map((s) => s.name));
+      const { snapshots: imported, newCategories } = await parseImportWithCategories(
+        file,
+        snapshots.map((s) => s.name),
+        categories,
+      );
+      // Categories first, so no imported snapshot ever points at a missing one.
+      await addCategories(newCategories);
       await addSnapshots(imported);
+      setCategories(await getCategories());
       getSnapshots().then(setSnapshots);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to import file.');
     }
+  };
+
+  const toggleCategory = async (snapshot: Snapshot, categoryId: string) => {
+    const next = snapshot.categoryIds.includes(categoryId)
+      ? snapshot.categoryIds.filter((id) => id !== categoryId)
+      : [...snapshot.categoryIds, categoryId];
+    try {
+      await setSnapshotCategories(snapshot.id, next);
+      patchSnapshot(snapshot.id, { categoryIds: next });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Couldn't update categories.");
+    }
+  };
+
+  const createCategoryFor = async (snapshot: Snapshot, name: string) => {
+    try {
+      const category = await addCategory(name);
+      setCategories((prev) => [...prev, category]);
+      const next = [...snapshot.categoryIds, category.id];
+      await setSnapshotCategories(snapshot.id, next);
+      patchSnapshot(snapshot.id, { categoryIds: next });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Couldn't create that category.");
+    }
+  };
+
+  const changeView = (next: DashboardView) => {
+    setView(next);
+    setDashboardView(next);
+    setSearchQuery('');
+    setOpenCategoryId(null);
+  };
+
+  useEffect(() => {
+    if (!dropNotice) return;
+    const timer = setTimeout(() => setDropNotice(null), 2500);
+    return () => clearTimeout(timer);
+  }, [dropNotice]);
+
+  const handleDrillDragEnd = async (event: DragEndEvent) => {
+    setDrillDragId(null);
+    const overId = event.over?.id;
+    if (typeof overId !== 'string' || !overId.startsWith(CATEGORY_DROP_PREFIX)) return;
+    const categoryId = overId.slice(CATEGORY_DROP_PREFIX.length);
+    const snapshot = snapshots.find((s) => s.id === event.active.id);
+    const category = categories.find((c) => c.id === categoryId);
+    if (!snapshot || !category) return;
+    if (snapshot.categoryIds.includes(categoryId)) {
+      setDropNotice(`Already in "${category.name}"`);
+      return;
+    }
+    try {
+      await addSnapshotToCategory(snapshot.id, categoryId);
+      patchSnapshot(snapshot.id, { categoryIds: [...snapshot.categoryIds, categoryId] });
+      setDropNotice(`Added to "${category.name}"`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Couldn't add to that category.");
+    }
+  };
+
+  const applyBulkCategories = async (categoryIds: string[]) => {
+    try {
+      await addSnapshotsToCategories([...selectedIds], categoryIds);
+      setSnapshots(await getSnapshots());
+      toggleSelectionMode();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Couldn't add to those categories.");
+    }
+  };
+
+  const createCategoryForBulk = async (name: string) => {
+    const category = await addCategory(name);
+    setCategories((prev) => [...prev, category]);
+    return category;
+  };
+
+  const handleRenameCategory = async (id: string, name: string) => {
+    await renameCategory(id, name);
+    setCategories(await getCategories());
+  };
+
+  const handleRecolorCategory = async (id: string, color: string | null) => {
+    await setCategoryColor(id, color);
+    setCategories(await getCategories());
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    await deleteCategory(id);
+    setCategories(await getCategories());
+    setSnapshots(await getSnapshots());
   };
 
   const cardProps = (snapshot: Snapshot) => ({
@@ -866,9 +1055,12 @@ function App() {
     onUpdate: () => handleUpdate(snapshot),
     onDelete: () => handleDelete(snapshot),
     onTogglePin: () => togglePin(snapshot),
-    onExport: () => downloadSnapshotsAsFile([snapshot]),
+    onExport: () => downloadSnapshotsAsFile([snapshot], categories),
     onRemoveTab: (index: number) => removeTab(snapshot, index),
     onMoveTab: (index: number, direction: -1 | 1) => moveTab(snapshot, index, direction),
+    categories,
+    onToggleCategory: (categoryId: string) => toggleCategory(snapshot, categoryId),
+    onCreateCategory: (name: string) => createCategoryFor(snapshot, name),
     selectionMode,
     selected: selectedIds.has(snapshot.id),
     onToggleSelect: () => toggleSelect(snapshot.id),
@@ -877,6 +1069,24 @@ function App() {
     onHoverStart: () => setHoveredId(snapshot.id),
     onHoverEnd: () => setHoveredId(null),
   });
+
+  const drilledCategory =
+    view === 'categories' && openCategoryId !== null && openCategoryId !== UNCATEGORIZED_ID
+      ? categories.find((c) => c.id === openCategoryId)
+      : undefined;
+  const drilledUncategorized = view === 'categories' && openCategoryId === UNCATEGORIZED_ID;
+  const isDrilledIn = drilledCategory !== undefined || drilledUncategorized;
+  const drilledSnapshots = (() => {
+    if (!isDrilledIn) return [];
+    const list = drilledCategory
+      ? getSnapshotsInCategory(
+          snapshots.filter((s) => !isArchivedSnapshot(s)),
+          drilledCategory.id,
+        )
+      : getUncategorizedSnapshots(snapshots, categories);
+    const { pinned: pinnedFirst, unpinned: rest } = getDisplayOrder(list, 'mfu');
+    return [...pinnedFirst, ...rest];
+  })();
 
   const chromeBlurClass = `transition-[filter] duration-200 ${hoveredId ? 'blur-sm' : ''}`;
 
@@ -912,6 +1122,12 @@ function App() {
               <Button size="sm" onClick={exportSelected} disabled={selectedIds.size === 0}>
                 <Download size={14} className="mr-1" /> Export selected
               </Button>
+              <BulkCategoryDialog
+                categories={categories}
+                selectedCount={selectedIds.size}
+                onApply={applyBulkCategories}
+                onCreate={createCategoryForBulk}
+              />
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button size="sm" variant="destructive" disabled={selectedIds.size === 0}>
@@ -981,7 +1197,7 @@ function App() {
         nudgeIntervalMinutes={nudgeIntervalMinutes}
         onOpenNudgeSettings={() => setNudgeDialogOpen(true)}
         canExport={snapshots.length > 0}
-        onExportAll={() => downloadSnapshotsAsFile(snapshots)}
+        onExportAll={() => downloadSnapshotsAsFile(snapshots, categories)}
         onImportFile={handleImportFile}
         onOpenTutorial={() => setOnboardingOpen(true)}
       />
@@ -997,6 +1213,8 @@ function App() {
 
       {snapshots.length > 0 && (
         <div className={`mb-6 flex flex-wrap items-center gap-3 ${chromeBlurClass}`}>
+          {view === 'simple' ? (
+            <>
           <div className="relative min-w-[220px] flex-1">
             <Search
               size={15}
@@ -1035,6 +1253,33 @@ function App() {
               className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
             />
           </div>
+            </>
+          ) : (
+            <div className="flex-1" />
+          )}
+          <div className="flex rounded-full border border-border bg-card p-1 shadow-sm">
+            {(
+              [
+                { id: 'simple', label: 'Simple', icon: <LayoutGrid size={14} /> },
+                { id: 'categories', label: 'Categories', icon: <Layers size={14} /> },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => changeView(opt.id)}
+                aria-pressed={view === opt.id}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                  view === opt.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {opt.icon}
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1046,7 +1291,7 @@ function App() {
         </p>
       ) : (
         <div className="flex flex-col gap-8">
-          {pinned.length > 0 && (
+          {pinned.length > 0 && !isDrilledIn && (
             <section>
               <h2 className={`mb-3 flex items-center gap-1.5 text-sm font-medium text-muted-foreground ${chromeBlurClass}`}>
                 <Pin size={14} /> Pinned
@@ -1079,16 +1324,105 @@ function App() {
               </DndContext>
             </section>
           )}
-          <section>
-            <h2 className={`mb-3 text-sm font-medium text-muted-foreground ${chromeBlurClass}`}>
-              All snapshots
-            </h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {unpinned.map((snapshot) => (
-                <SnapshotCard key={snapshot.id} {...cardProps(snapshot)} />
-              ))}
-            </div>
-          </section>
+          {view === 'categories' && isDrilledIn ? (
+            <section>
+              <div className={`mb-4 flex flex-wrap items-center gap-2 ${chromeBlurClass}`}>
+                <Button size="sm" variant="outline" onClick={() => setOpenCategoryId(null)}>
+                  <ArrowLeft size={14} className="mr-1" /> All
+                </Button>
+                <span className="text-muted-foreground">/</span>
+                <span
+                  className="h-3 w-3 rounded-full"
+                  style={{
+                    backgroundColor: drilledCategory
+                      ? getCategoryColor(drilledCategory)
+                      : UNCATEGORIZED_COLOR,
+                  }}
+                />
+                <h2 className="text-lg font-semibold tracking-tight">
+                  {drilledCategory ? drilledCategory.name : 'Uncategorized'}
+                </h2>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  {drilledSnapshots.length}
+                </span>
+              </div>
+              {drilledSnapshots.length === 0 ? (
+                <p className="text-muted-foreground">
+                  No snapshots in this category yet. Tag one with the tag icon on its card.
+                </p>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={pointerWithin}
+                  onDragStart={(e) => setDrillDragId(String(e.active.id))}
+                  onDragEnd={handleDrillDragEnd}
+                  onDragCancel={() => setDrillDragId(null)}
+                >
+                  <CategoryDropStrip
+                    categories={categories.filter((c) => c.id !== drilledCategory?.id)}
+                    notice={dropNotice}
+                  />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {drilledSnapshots.map((snapshot, index) => {
+                      const props = {
+                        ...cardProps(snapshot),
+                        onRemoveFromCategory: drilledCategory
+                          ? () => toggleCategory(snapshot, drilledCategory.id)
+                          : undefined,
+                      };
+                      return (
+                        <div
+                          key={snapshot.id}
+                          className="fan-out"
+                          style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
+                        >
+                          {isArchivedSnapshot(snapshot) ? (
+                            <SnapshotCard {...props} />
+                          ) : (
+                            <DraggableDrillCard {...props} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <DragOverlay>
+                    {drillDragId ? (
+                      <div className="rotate-2 opacity-90 shadow-xl">
+                        <SnapshotCard
+                          {...cardProps(drilledSnapshots.find((s) => s.id === drillDragId)!)}
+                        />
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+              )}
+            </section>
+          ) : view === 'categories' ? (
+            <section>
+              <h2 className={`mb-3 text-sm font-medium text-muted-foreground ${chromeBlurClass}`}>
+                Categories
+              </h2>
+              <CategoriesView
+                snapshots={snapshots}
+                categories={categories}
+                onRename={handleRenameCategory}
+                onRecolor={handleRecolorCategory}
+                onDelete={handleDeleteCategory}
+                onOpen={setOpenCategoryId}
+              />
+            </section>
+          ) : (
+            <section>
+              <h2 className={`mb-3 text-sm font-medium text-muted-foreground ${chromeBlurClass}`}>
+                All snapshots
+              </h2>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {unpinned.map((snapshot) => (
+                  <SnapshotCard key={snapshot.id} {...cardProps(snapshot)} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
       <OnboardingDialog open={onboardingOpen} onOpenChange={setOnboardingOpen} />

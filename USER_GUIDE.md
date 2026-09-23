@@ -16,6 +16,7 @@ extension day-to-day. (Looking to build or contribute instead? See
 - [Editing a snapshot](#editing-a-snapshot)
 - [Pinning and reordering](#pinning-and-reordering)
 - [Search and sort](#search-and-sort)
+- [Categories](#categories)
 - [Selecting multiple snapshots](#selecting-multiple-snapshots)
 - [Exporting and sharing](#exporting-and-sharing)
 - [Importing](#importing)
@@ -179,6 +180,41 @@ Above the snapshot grid:
 
 (Pinned snapshots always keep their manually-set position regardless of
 the sort option — that's the point of pinning.)
+
+## Categories
+
+Group related snapshots with categories — like "Job Hunt", "Research" or
+"Reading list". A snapshot can be in **several** categories, or none.
+
+**Tagging a snapshot**
+
+- Click the **tag icon** on a card, tick the categories you want, or type a
+  name and click **Add** to create a new one on the spot.
+- Tagged categories show as small colored chips on the card (three at
+  most, then "+2").
+- To tag many at once, use [Select mode](#selecting-multiple-snapshots) and
+  click **Add to category**.
+
+**Categories view**
+
+Use the **Simple | Categories** switch next to the search box (Simple is
+the default, and TabBuddy remembers your choice).
+
+- Each category is a **stack of cards** showing its name, how many
+  snapshots it holds, and the first few of them. Snapshots with no
+  category sit in a grey **Uncategorized** stack.
+- Click a stack to **open** it. Every card inside works as usual, and the
+  folder-minus button removes just that category from a card. Click
+  **← All** to go back.
+- While inside a category, drag a card by its grip handle (⠿) onto one of
+  the categories in the strip above to add it there too — dropping never
+  removes its other categories.
+- Click the **⋯** on a stack to rename it, pick a color, or delete it.
+  Deleting a category never deletes the snapshots in it.
+
+The Archived snapshot is not part of any category. Exporting snapshots
+also exports their categories, and importing matches them by name
+(creating any that are missing).
 
 ## Selecting multiple snapshots
 
