@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { captureWindowTabs, createSnapshotFromCurrentWindow } from './capture';
+import { buildLazyTabUrl } from './lazyTab';
 import { getManagedTabIds } from './managedTabs';
 
 // fake-browser doesn't implement tabGroups.query, and doesn't let us set a
@@ -33,6 +34,20 @@ describe('captureWindowTabs', () => {
     expect(tabs).toEqual([
       { url: '', title: '', favIconUrl: undefined, pinned: false, groupIndex: null },
     ]);
+  });
+});
+
+describe('captureWindowTabs with lazy placeholders', () => {
+  it('saves the real page, not the placeholder address', async () => {
+    const lazy = buildLazyTabUrl({ url: 'https://real.com/p', title: 'Real page' });
+    vi.spyOn(browser.tabs, 'query').mockResolvedValue([
+      { id: 1, url: lazy, title: 'real.com', pinned: false, groupId: -1 },
+    ] as any);
+    vi.spyOn(browser.tabGroups as any, 'query').mockResolvedValue([]);
+
+    const { tabs } = await captureWindowTabs(1);
+
+    expect(tabs[0]).toMatchObject({ url: 'https://real.com/p', title: 'Real page' });
   });
 });
 

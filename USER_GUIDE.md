@@ -9,6 +9,7 @@ extension day-to-day. (Looking to build or contribute instead? See
 - [The basics: saving a window](#the-basics-saving-a-window)
 - [Naming your snapshots](#naming-your-snapshots)
 - [Opening a saved snapshot](#opening-a-saved-snapshot)
+- [Lazy-loaded tabs](#lazy-loaded-tabs)
 - [Native Chrome tab groups](#native-chrome-tab-groups)
 - [Updating a snapshot](#updating-a-snapshot)
 - [The dashboard](#the-dashboard)
@@ -59,11 +60,40 @@ From the dashboard, click **Open** on any snapshot.
 - If that snapshot's window is already open somewhere, TabBuddy **focuses
   it** instead of opening a duplicate.
 - Otherwise, it opens a brand-new window with every tab restored in
-  order, pinned tabs still pinned, and tab groups recreated.
+  order, pinned tabs still pinned, and tab groups recreated. By default
+  only the first tab loads right away — see [Lazy-loaded
+  tabs](#lazy-loaded-tabs).
 
 Because restored tabs load fresh, things like login sessions, scroll
 position, and form contents aren't preserved — only the tab list itself
 is. Think of it as restoring a bookmark list, not a browser session.
+
+## Lazy-loaded tabs
+
+Opening a snapshot with dozens of tabs would normally load every page at
+once and eat your memory. So by default TabBuddy loads **only the first
+tab** and opens the rest as light placeholder pages. Each placeholder
+shows:
+
+- the tab name as `domain – page title` (for example
+  `linkedin.com – Senior Engineer Jobs`),
+- the saved favicon, and
+- the full saved URL.
+
+The real page loads the moment you **switch to that tab** — or click
+**Load now** on the placeholder. Tabs you never touch never load.
+
+Things to know:
+
+- The address bar shows a TabBuddy page (not the site's address) until the
+  tab loads. The full URL is shown on the page itself.
+- Saving, updating, grouping by site, and sorting tabs all use the real
+  page, never the placeholder, so your snapshots stay correct.
+- `chrome://` and `file://` tabs can't be opened by a placeholder, so they
+  always load normally.
+- Prefer everything loaded up front? Click the **leaf** button in the
+  dashboard header to turn lazy tabs off (it's filled when on). It only
+  affects snapshots you open afterward.
 
 ## Native Chrome tab groups
 

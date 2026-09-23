@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeSnapshot, makeTab } from '@/test/factories';
 import { addSnapshot, getSnapshots } from './storage';
+import { setLazyRestoreEnabled } from './lazyRestore';
 import { getManagedTabIds } from './managedTabs';
 import { restoreSnapshot } from './restore';
 
@@ -79,5 +80,58 @@ describe('restoreSnapshot', () => {
 
     const windowId = await restoreSnapshot(snapshot);
     expect(windowId).toBe(7);
+  });
+
+  it('opens only the first tab for real; the rest as lazy placeholders', async () => {
+    const snapshot = makeSnapshot({
+      linkedWindowId: null,
+      tabs: [
+        makeTab({ url: 'https://a.com/', title: 'A' }),
+        makeTab({ url: 'https://b.com/page', title: 'B' }),
+        makeTab({ url: 'chrome://settings/' }),
+      ],
+    });
+    await addSnapshot(snapshot);
+    const createSpy = vi
+      .spyOn(browser.windows, 'create')
+      .mockResolvedValue({ id: 60, tabs: [{ id: 1 }, { id: 2 }, { id: 3 }] } as any);
+
+    await restoreSnapshot(snapshot);
+
+    const { url } = createSpy.mock.calls[0]![0] as { url: string[] };
+    expect(url[0]).toBe('https://a.com/');
+    expect(url[1]).toContain('lazy.html');
+    expect(new URL(url[1]!).searchParams.get('u')).toBe('https://b.com/page');
+    expect(url[2]).toBe('chrome://settings/');
+  });
+
+  it('opens every tab normally when lazy restore is turned off', async () => {
+    await setLazyRestoreEnabled(false);
+    const snapshot = makeSnapshot({
+      linkedWindowId: null,
+      tabs: [makeTab({ url: 'https://a.com/' }), makeTab({ url: 'https://b.com/' })],
+    });
+    await addSnapshot(snapshot);
+    const createSpy = vi
+      .spyOn(browser.windows, 'create')
+      .mockResolvedValue({ id: 62, tabs: [{ id: 1 }, { id: 2 }] } as any);
+
+    await restoreSnapshot(snapshot);
+
+    const { url } = createSpy.mock.calls[0]![0] as { url: string[] };
+    expect(url).toEqual(['https://a.com/', 'https://b.com/']);
+  });
+
+  it('registers all restored tabs as managed', async () => {
+    const snapshot = makeSnapshot({ linkedWindowId: null, tabs: [makeTab(), makeTab()] });
+    await addSnapshot(snapshot);
+    vi.spyOn(browser.windows, 'create').mockResolvedValue({
+      id: 61,
+      tabs: [{ id: 1 }, { id: 2 }],
+    } as any);
+
+    await restoreSnapshot(snapshot);
+
+    expect([...(await getManagedTabIds())].sort()).toEqual([1, 2]);
   });
 });

@@ -1,3 +1,4 @@
+import { resolveLazyTab } from './lazyTab';
 import { setManagedTabs } from './managedTabs';
 import type { Snapshot, SnapshotTab, SnapshotTabGroup } from './types';
 
@@ -17,7 +18,7 @@ export async function captureWindowTabs(windowId: number): Promise<{
     return { title: group.title ?? '', color: group.color };
   });
 
-  const snapshotTabs: SnapshotTab[] = tabs.map((tab) => ({
+  const snapshotTabs: SnapshotTab[] = tabs.map(resolveLazyTab).map((tab) => ({
     url: tab.url ?? '',
     title: tab.title ?? '',
     favIconUrl: tab.favIconUrl,

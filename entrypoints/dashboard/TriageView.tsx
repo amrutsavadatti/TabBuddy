@@ -28,6 +28,7 @@ import {
 import { generateSnapshotName, getUniqueName } from '@/lib/names';
 import { tabToSnapshotTab, type TriageTab } from '@/lib/triage';
 import { getAccentColor } from '@/lib/color';
+import { resolveLazyTab } from '@/lib/lazyTab';
 import { ARCHIVED_ACCENT_COLOR, isArchivedSnapshot } from '@/lib/archive';
 import { Button } from '@/components/ui/button';
 import type { Snapshot } from '@/lib/types';
@@ -154,6 +155,7 @@ export function TriageView({
       setTabs(
         rawTabs
           .filter((t) => t.id !== undefined)
+          .map(resolveLazyTab)
           .map((t) => ({
             id: t.id!,
             url: t.url ?? '',

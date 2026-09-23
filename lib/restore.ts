@@ -1,5 +1,7 @@
 import type { Browser } from 'wxt/browser';
 import type { Snapshot } from './types';
+import { getLazyRestoreEnabled } from './lazyRestore';
+import { buildLazyTabUrl, isHttpUrl } from './lazyTab';
 import { setManagedTabs } from './managedTabs';
 import { updateSnapshot } from './storage';
 
@@ -45,7 +47,12 @@ async function recreateTabGroups(
 }
 
 async function openInNewWindow(snapshot: Snapshot): Promise<number> {
-  const urls = snapshot.tabs.map((tab) => tab.url);
+  // With lazy restore on, only the first (active) tab loads for real. The
+  // rest open as light placeholders that load when the user switches to them.
+  const lazy = await getLazyRestoreEnabled();
+  const urls = snapshot.tabs.map((tab, index) =>
+    lazy && index > 0 && isHttpUrl(tab.url) ? buildLazyTabUrl(tab) : tab.url,
+  );
   const createdWindow = await browser.windows.create(
     urls.length ? { url: urls } : {},
   );
@@ -54,10 +61,6 @@ async function openInNewWindow(snapshot: Snapshot): Promise<number> {
   }
 
   const createdTabs = createdWindow.tabs ?? [];
-  await setManagedTabs(
-    snapshot.id,
-    createdTabs.map((tab) => tab.id).filter((id): id is number => id !== undefined),
-  );
   await Promise.all(
     createdTabs.map((tab, index) => {
       const savedTab = snapshot.tabs[index];
@@ -72,6 +75,11 @@ async function openInNewWindow(snapshot: Snapshot): Promise<number> {
     createdTabs.map((tab) => tab.id),
     snapshot,
     createdWindow.id,
+  );
+
+  await setManagedTabs(
+    snapshot.id,
+    createdTabs.map((tab) => tab.id).filter((id): id is number => id !== undefined),
   );
 
   return createdWindow.id;

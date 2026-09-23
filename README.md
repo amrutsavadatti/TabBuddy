@@ -27,6 +27,10 @@ and get them back with one click.
   everything as a JSON file — or share one with a friend.
 - **Hover to peek.** Hover a snapshot to preview its tabs (with a focus
   blur on everything else) without opening it.
+- **Lazy-loaded restore.** Opening a big snapshot loads only the first
+  tab; the rest open as light placeholders showing `domain – page title`
+  and the full URL, and load when you switch to them. Toggle it from the
+  dashboard's leaf button.
 - **Tab hoarder nudges.** TabBuddy checks on a schedule you set for tabs
   you've left untouched (you choose what "stale" means), and nudges you to
   Close, Archive & Close (into a reserved, pinned "Archived" snapshot), or

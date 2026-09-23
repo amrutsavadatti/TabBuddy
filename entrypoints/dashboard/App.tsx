@@ -31,6 +31,7 @@ import {
   HelpCircle,
   Keyboard,
   LayoutGrid,
+  Leaf,
   Lock,
   MousePointerClick,
   Palette,
@@ -59,6 +60,7 @@ import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { getDisplayOrder, SORT_OPTIONS, type SortOption } from '@/lib/sort';
 import { VIBES, getStoredVibe, setStoredVibe, type Vibe } from '@/lib/vibes';
 import { getHoverPeekEnabled, setHoverPeekEnabled } from '@/lib/peek';
+import { getLazyRestoreEnabled, setLazyRestoreEnabled } from '@/lib/lazyRestore';
 import {
   DEFAULT_NUDGE_INTERVAL_MINUTES,
   DEFAULT_NUDGE_STALE_MINUTES,
@@ -166,6 +168,13 @@ const ONBOARDING_STEPS: {
     description:
       'Hover any card to preview its tabs with favicons — everything else softly blurs to keep focus on what you\'re peeking at.',
     accent: VIBES[3]!.swatch,
+  },
+  {
+    icon: Leaf,
+    title: 'Lazy-loaded tabs',
+    description:
+      'Opening a snapshot loads only the first tab. The rest wait as light placeholders (domain, page title, full URL) and load when you switch to them. Turn it off with the leaf button.',
+    accent: VIBES[2]!.swatch,
   },
   {
     icon: Bell,
@@ -619,6 +628,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('mfu');
   const [hoverPeekEnabled, setHoverPeekEnabledState] = useState(true);
+  const [lazyRestoreEnabled, setLazyRestoreEnabledState] = useState(true);
   const [nudgeEnabled, setNudgeEnabledState] = useState(true);
   const [nudgeIntervalMinutes, setNudgeIntervalMinutesState] = useState(
     DEFAULT_NUDGE_INTERVAL_MINUTES,
@@ -643,6 +653,7 @@ function App() {
       document.documentElement.dataset.vibe = v;
     });
     getHoverPeekEnabled().then(setHoverPeekEnabledState);
+    getLazyRestoreEnabled().then(setLazyRestoreEnabledState);
     getNudgeEnabled().then(setNudgeEnabledState);
     getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
     getNudgeStaleMinutes().then(setNudgeStaleMinutesState);
@@ -664,6 +675,14 @@ function App() {
     setHoverPeekEnabledState((prev) => {
       const next = !prev;
       setHoverPeekEnabled(next);
+      return next;
+    });
+  };
+
+  const toggleLazyRestore = () => {
+    setLazyRestoreEnabledState((prev) => {
+      const next = !prev;
+      setLazyRestoreEnabled(next);
       return next;
     });
   };
@@ -906,6 +925,19 @@ function App() {
           >
             {hoverPeekEnabled ? <Eye size={14} className="mr-1" /> : <EyeOff size={14} className="mr-1" />}
             Hover peek
+          </Button>
+
+          <Button
+            size="sm"
+            variant={lazyRestoreEnabled ? 'default' : 'outline'}
+            onClick={toggleLazyRestore}
+            title={
+              lazyRestoreEnabled
+                ? 'Lazy tabs on: opening a snapshot loads only the first tab; the rest load when you switch to them'
+                : 'Lazy tabs off: opening a snapshot loads every tab'
+            }
+          >
+            <Leaf size={14} />
           </Button>
 
           <Button

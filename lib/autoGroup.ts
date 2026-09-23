@@ -1,4 +1,5 @@
 import type { Browser } from 'wxt/browser';
+import { resolveLazyTab } from './lazyTab';
 
 const GROUP_COLORS: `${Browser.tabGroups.Color}`[] = [
   'blue',
@@ -38,7 +39,7 @@ export async function autoGroupByDomain(windowId: number): Promise<number> {
   const buckets = new Map<string, number[]>();
   for (const tab of tabs) {
     if (tab.id === undefined) continue;
-    const hostname = getHostname(tab.url);
+    const hostname = getHostname(resolveLazyTab(tab).url);
     if (!hostname) continue;
     const tabIds = buckets.get(hostname) ?? [];
     tabIds.push(tab.id);

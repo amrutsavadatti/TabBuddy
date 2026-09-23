@@ -1,3 +1,4 @@
+import { resolveLazyTab } from './lazyTab';
 import { clearManagedTabs, setManagedTabs } from './managedTabs';
 import { getSnapshots, updateSnapshots } from './storage';
 
@@ -32,6 +33,7 @@ export async function reconcileAfterReload(): Promise<void> {
     const savedUrls = new Set(snapshot.tabs.map((t) => t.url));
     const liveTabs = await browser.tabs.query({ windowId: snapshot.linkedWindowId });
     const ids = liveTabs
+      .map(resolveLazyTab)
       .filter((t) => t.id !== undefined && t.url !== undefined && savedUrls.has(t.url))
       .map((t) => t.id!);
     await setManagedTabs(snapshot.id, ids);

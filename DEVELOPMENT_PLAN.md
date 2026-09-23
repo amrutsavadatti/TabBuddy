@@ -62,29 +62,36 @@ linked windows once (URL matching used only to bootstrap).
 browser.
 **Commit:** `fix: reconcile snapshot window links and managed tabs on startup`
 
-## Track B — Lazy-loaded restore (after Track A)
+## Track B — Lazy-loaded restore (done)
 
 **Idea:** when a snapshot opens, only the active tab loads; the rest are
 discarded (present in the tab strip, no memory used until clicked). Managed
 tabs are already protected from nudges by Track A.
 
-### 🔲 Slice L1 — Discard non-active tabs on restore
-**Build:** After restoring a snapshot, discard every tab except the active
-one via `tabs.discard`.
-**Test:** Open a snapshot, confirm only one tab is loaded and the rest show
-as discarded; clicking one loads it.
-**Commit:** `feat: lazy-load restored tabs by discarding inactive ones`
+### ✅ Slice L1 — Lazy placeholders on restore
+**Build:** Opening a snapshot loads only the first tab for real. Every other
+http(s) tab opens as a lightweight placeholder page (`lazy.html`) showing
+the domain, saved title and favicon; it loads the real link when the user
+switches to that tab (or clicks "Load now"). Save, Update, Group by site
+and Sort tabs see through the placeholder, so it is never saved as a tab's
+URL. (An earlier attempt used `tabs.discard` on tabs that hadn't loaded yet,
+which left them untitled and blank.)
+**Test:** Open a snapshot with several tabs: only the first loads; the rest
+show their domain; clicking one loads its page; Update keeps real URLs.
+**Commit:** `feat: open restored snapshot tabs as lazy-loading placeholders`
 
-### 🔲 Slice L2 — Dashboard toggle
+### ✅ Slice L2 — Dashboard toggle
 **Build:** A setting to turn lazy loading on or off (default on).
 **Test:** Toggle off, open a snapshot, confirm all tabs load.
 **Commit:** `feat: add lazy-load toggle to dashboard`
 
-### 🔲 Slice L3 — Polish and docs
-**Build:** Handle discarded-tab titles (bare URLs until loaded), update
-README, USER_GUIDE, and the onboarding tutorial.
-**Test:** Read through docs; open a snapshot with discarded tabs and check
-titles/favicons.
+### ✅ Slice L3 — Docs and onboarding
+**Build:** Placeholder titles were already solved in L1 (`domain – page
+title`, full URL, favicon on the page), so this slice is documentation:
+README feature bullet, a USER_GUIDE "Lazy-loaded tabs" section, and a new
+onboarding tutorial step.
+**Test:** Read through the docs; step through the dashboard onboarding and
+confirm the new step appears.
 **Commit:** `docs: document lazy-loaded restore`
 
 ---
