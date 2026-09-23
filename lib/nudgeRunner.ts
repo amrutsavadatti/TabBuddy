@@ -1,4 +1,5 @@
 import { DEFAULT_INACTIVITY_THRESHOLD_MS } from './importance';
+import { getManagedTabIds } from './managedTabs';
 import { findNudgeCandidates, type ScanTab } from './nudgeScan';
 import { isTabSnoozed, pruneExpiredSnoozes } from './nudgeState';
 
@@ -41,8 +42,17 @@ export async function runNudgeScan(
     scanTabs.filter((_, i) => snoozedFlags[i]).map((tab) => tab.id),
   );
 
+  // Tabs owned by a snapshot are never nudged: closing one would silently
+  // drop it from the snapshot the next time the user presses Update.
+  const managedIds = await getManagedTabIds();
+
   const candidateIds = new Set(
-    findNudgeCandidates(scanTabs, (id) => snoozedIds.has(id), now, inactivityThresholdMs),
+    findNudgeCandidates(
+      scanTabs,
+      (id) => snoozedIds.has(id) || managedIds.has(id),
+      now,
+      inactivityThresholdMs,
+    ),
   );
 
   const candidates = scanTabs
@@ -50,7 +60,7 @@ export async function runNudgeScan(
     .map(({ id, title, url }) => ({ id, title, url }));
 
   console.log(
-    `[TabBuddy nudge] scanned ${scanTabs.length} tabs — ${candidates.length} candidate(s), ${snoozedIds.size} snoozed`,
+    `[TabBuddy nudge] scanned ${scanTabs.length} tabs — ${candidates.length} candidate(s), ${snoozedIds.size} snoozed, ${managedIds.size} in snapshots`,
     candidates,
   );
 

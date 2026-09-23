@@ -1,5 +1,6 @@
 import type { Snapshot } from './types';
 import { captureWindowTabs } from './capture';
+import { setManagedTabs } from './managedTabs';
 import { updateSnapshot } from './storage';
 
 export async function updateSnapshotFromLiveWindow(
@@ -15,7 +16,8 @@ export async function updateSnapshotFromLiveWindow(
     return false;
   }
 
-  const { tabs, tabGroups } = await captureWindowTabs(snapshot.linkedWindowId);
+  const { tabs, tabGroups, tabIds } = await captureWindowTabs(snapshot.linkedWindowId);
+  await setManagedTabs(snapshot.id, tabIds);
   await updateSnapshot(snapshot.id, {
     tabs,
     tabGroups,

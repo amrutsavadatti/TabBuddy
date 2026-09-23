@@ -1,3 +1,4 @@
+import { unmanageSnapshots } from './managedTabs';
 import type { Snapshot } from './types';
 
 const SNAPSHOTS_KEY = 'snapshots';
@@ -29,6 +30,7 @@ export async function deleteSnapshots(ids: string[]): Promise<void> {
   const snapshots = await getSnapshots();
   const remaining = snapshots.filter((snapshot) => !idsToDelete.has(snapshot.id));
   await browser.storage.local.set({ [SNAPSHOTS_KEY]: remaining });
+  await unmanageSnapshots(ids);
 }
 
 export async function updateSnapshot(

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeSnapshot, makeTab } from '@/test/factories';
 import { addSnapshot, getSnapshots } from './storage';
+import { getManagedTabIds } from './managedTabs';
 import { restoreSnapshot } from './restore';
 
 describe('restoreSnapshot', () => {
@@ -48,6 +49,7 @@ describe('restoreSnapshot', () => {
     const windowId = await restoreSnapshot(snapshot);
 
     expect(windowId).toBe(99);
+    expect([...(await getManagedTabIds())].sort()).toEqual([1, 2, 3]);
     expect(updateTabSpy).toHaveBeenCalledWith(1, { pinned: true });
     expect(updateTabSpy).not.toHaveBeenCalledWith(2, expect.anything());
     expect(groupSpy).toHaveBeenCalledWith({

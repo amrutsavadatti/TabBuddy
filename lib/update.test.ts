@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeSnapshot } from '@/test/factories';
 import { addSnapshot, getSnapshots } from './storage';
+import { getManagedTabIds } from './managedTabs';
 import { updateSnapshotFromLiveWindow } from './update';
 
 describe('updateSnapshotFromLiveWindow', () => {
@@ -36,5 +37,6 @@ describe('updateSnapshotFromLiveWindow', () => {
       { url: 'https://fresh.com/', title: 'Fresh', favIconUrl: undefined, pinned: false, groupIndex: null },
     ]);
     expect(updated?.updatedAt).toBeGreaterThanOrEqual(snapshot.updatedAt);
+    expect([...(await getManagedTabIds())]).toEqual([1]);
   });
 });

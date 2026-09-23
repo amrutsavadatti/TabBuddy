@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { captureWindowTabs, createSnapshotFromCurrentWindow } from './capture';
+import { getManagedTabIds } from './managedTabs';
 
 // fake-browser doesn't implement tabGroups.query, and doesn't let us set a
 // tab's groupId via tabs.create, so tabs/tabGroups are mocked directly here
@@ -54,5 +55,18 @@ describe('createSnapshotFromCurrentWindow', () => {
     expect(snapshot.pinnedPosition).toBeNull();
     expect(snapshot.id).toBeTruthy();
     expect(snapshot.createdAt).toBe(snapshot.updatedAt);
+  });
+
+  it('registers the window\'s tabs as managed by the new snapshot', async () => {
+    vi.spyOn(browser.windows, 'getCurrent').mockResolvedValue({ id: 7 } as any);
+    vi.spyOn(browser.tabs, 'query').mockResolvedValue([
+      { id: 11, url: 'https://a.com/', title: 'A', pinned: false, groupId: -1 },
+      { id: 12, url: 'https://b.com/', title: 'B', pinned: false, groupId: -1 },
+    ] as any);
+    vi.spyOn(browser.tabGroups as any, 'query').mockResolvedValue([]);
+
+    await createSnapshotFromCurrentWindow('My Window');
+
+    expect([...(await getManagedTabIds())].sort()).toEqual([11, 12]);
   });
 });

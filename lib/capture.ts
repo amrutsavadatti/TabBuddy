@@ -1,8 +1,10 @@
+import { setManagedTabs } from './managedTabs';
 import type { Snapshot, SnapshotTab, SnapshotTabGroup } from './types';
 
 export async function captureWindowTabs(windowId: number): Promise<{
   tabs: SnapshotTab[];
   tabGroups: SnapshotTabGroup[];
+  tabIds: number[];
 }> {
   const [tabs, groups] = await Promise.all([
     browser.tabs.query({ windowId }),
@@ -26,17 +28,21 @@ export async function captureWindowTabs(windowId: number): Promise<{
         : null,
   }));
 
-  return { tabs: snapshotTabs, tabGroups };
+  const tabIds = tabs.map((tab) => tab.id).filter((id): id is number => id !== undefined);
+
+  return { tabs: snapshotTabs, tabGroups, tabIds };
 }
 
 export async function createSnapshotFromCurrentWindow(
   name: string,
 ): Promise<Snapshot> {
   const currentWindow = await browser.windows.getCurrent();
-  const { tabs, tabGroups } = await captureWindowTabs(currentWindow.id!);
+  const { tabs, tabGroups, tabIds } = await captureWindowTabs(currentWindow.id!);
   const now = Date.now();
+  const id = crypto.randomUUID();
+  await setManagedTabs(id, tabIds);
   return {
-    id: crypto.randomUUID(),
+    id,
     name,
     tabs,
     tabGroups,

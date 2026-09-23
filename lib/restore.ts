@@ -1,5 +1,6 @@
 import type { Browser } from 'wxt/browser';
 import type { Snapshot } from './types';
+import { setManagedTabs } from './managedTabs';
 import { updateSnapshot } from './storage';
 
 async function focusExistingWindow(windowId: number): Promise<boolean> {
@@ -53,6 +54,10 @@ async function openInNewWindow(snapshot: Snapshot): Promise<number> {
   }
 
   const createdTabs = createdWindow.tabs ?? [];
+  await setManagedTabs(
+    snapshot.id,
+    createdTabs.map((tab) => tab.id).filter((id): id is number => id !== undefined),
+  );
   await Promise.all(
     createdTabs.map((tab, index) => {
       const savedTab = snapshot.tabs[index];

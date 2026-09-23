@@ -196,7 +196,7 @@ since it would otherwise fight with checkbox clicking.
 ## Tab hoarder nudges
 
 On a schedule you pick, TabBuddy quietly checks your open tabs for ones
-you haven't touched in a while (pinned and audible tabs are never nudged)
+you haven't touched for as long as you say (pinned and audible tabs are never nudged)
 and shows a small popup asking what to do with one of them:
 
 - **Close** — closes the tab, nothing saved.
@@ -209,10 +209,17 @@ Only one popup shows at a time, and at most one per check — if several
 tabs qualify, they're nudged one at a time across later checks rather
 than all at once.
 
-Click the **Nudges** button in the dashboard header to open its dropdown:
-toggle nudges on/off, or pick how often TabBuddy checks (5 min, 10 min,
-20 min — the default, 30 min, 1 hr, or 2 hrs). Changing the interval
-takes effect on the next check.
+Click the yellow bell button in the dashboard header to open the nudge
+settings. There are two tabs, each taking a number plus a unit (minutes,
+hours, or days):
+
+- **How often** — how often TabBuddy checks and nudges you (default 20
+  minutes).
+- **How old is stale** — how long a tab must go unopened before it can be
+  nudged (default 24 hours).
+
+You can also switch nudges on or off from the same window. New settings
+take effect on the next check.
 
 ## Background vibes
 

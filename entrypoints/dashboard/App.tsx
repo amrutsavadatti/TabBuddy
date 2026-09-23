@@ -61,12 +61,16 @@ import { VIBES, getStoredVibe, setStoredVibe, type Vibe } from '@/lib/vibes';
 import { getHoverPeekEnabled, setHoverPeekEnabled } from '@/lib/peek';
 import {
   DEFAULT_NUDGE_INTERVAL_MINUTES,
+  DEFAULT_NUDGE_STALE_MINUTES,
   getNudgeEnabled,
   getNudgeIntervalMinutes,
-  NUDGE_INTERVAL_OPTIONS_MINUTES,
+  getNudgeStaleMinutes,
   setNudgeEnabled,
   setNudgeIntervalMinutes,
+  setNudgeStaleMinutes,
 } from '@/lib/nudgeSettings';
+import { formatDurationShort } from '@/lib/duration';
+import { NudgeSettingsDialog } from './NudgeSettingsDialog';
 import { getHasSeenOnboarding, setHasSeenOnboarding } from '@/lib/onboarding';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
@@ -85,14 +89,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -106,12 +102,6 @@ function formatDate(timestamp: number): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
-}
-
-function formatNudgeInterval(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
-  const hours = minutes / 60;
-  return `${hours} hr${hours === 1 ? '' : 's'}`;
 }
 
 const ONBOARDING_STEPS: {
@@ -181,7 +171,7 @@ const ONBOARDING_STEPS: {
     icon: Bell,
     title: 'Tab hoarder nudges',
     description:
-      'On a schedule you pick (5 min to 2 hrs), TabBuddy checks for tabs you haven\'t touched in a while and nudges you to Close, Archive & Close, or Keep them. Adjust or turn it off anytime from the "Nudges" button.',
+      'TabBuddy checks on a schedule you pick for tabs you haven\'t touched in as long as you say, then nudges you to Close, Archive & Close, or Keep them. Tune both settings or turn it off from the yellow bell button.',
     accent: VIBES[1]!.swatch,
   },
   {
@@ -633,6 +623,8 @@ function App() {
   const [nudgeIntervalMinutes, setNudgeIntervalMinutesState] = useState(
     DEFAULT_NUDGE_INTERVAL_MINUTES,
   );
+  const [nudgeStaleMinutes, setNudgeStaleMinutesState] = useState(DEFAULT_NUDGE_STALE_MINUTES);
+  const [nudgeDialogOpen, setNudgeDialogOpen] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [triageWindowId, setTriageWindowId] = useState<number | null>(() => {
@@ -653,6 +645,7 @@ function App() {
     getHoverPeekEnabled().then(setHoverPeekEnabledState);
     getNudgeEnabled().then(setNudgeEnabledState);
     getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
+    getNudgeStaleMinutes().then(setNudgeStaleMinutesState);
     getHasSeenOnboarding().then((seen) => {
       if (!seen) {
         setOnboardingOpen(true);
@@ -675,17 +668,22 @@ function App() {
     });
   };
 
-  const toggleNudge = () => {
-    setNudgeEnabledState((prev) => {
-      const next = !prev;
-      setNudgeEnabled(next);
-      return next;
-    });
+  const changeNudgeEnabled = (enabled: boolean) => {
+    setNudgeEnabledState(enabled);
+    setNudgeEnabled(enabled);
   };
 
-  const changeNudgeInterval = (minutes: number) => {
-    setNudgeIntervalMinutesState(minutes);
-    setNudgeIntervalMinutes(minutes);
+  const saveNudgeSettings = ({
+    intervalMinutes,
+    staleMinutes,
+  }: {
+    intervalMinutes: number;
+    staleMinutes: number;
+  }) => {
+    setNudgeIntervalMinutesState(intervalMinutes);
+    setNudgeStaleMinutesState(staleMinutes);
+    setNudgeIntervalMinutes(intervalMinutes);
+    setNudgeStaleMinutes(staleMinutes);
   };
 
   const patchSnapshot = (id: string, changes: Partial<Snapshot>) => {
@@ -910,47 +908,33 @@ function App() {
             Hover peek
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="sm"
-                variant={nudgeEnabled ? 'default' : 'outline'}
-                className={
-                  nudgeEnabled
-                    ? 'bg-amber-400 text-amber-950 hover:bg-amber-300 hover:opacity-100'
-                    : undefined
-                }
-                title="Periodically nudge you to close, archive, or keep stale tabs"
-              >
-                {nudgeEnabled ? <Bell size={14} className="mr-1" /> : <BellOff size={14} className="mr-1" />}
-                {nudgeEnabled && (
-                  <span className="rounded-full bg-amber-950/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none">
-                    {formatNudgeInterval(nudgeIntervalMinutes)}
-                  </span>
-                )}
-                <ChevronDown size={14} className="ml-1" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={toggleNudge} selected={nudgeEnabled}>
-                <span className="flex items-center gap-2">
-                  {nudgeEnabled ? <Bell size={14} /> : <BellOff size={14} />}
-                  {nudgeEnabled ? 'Nudges on' : 'Nudges off'}
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Nudge me every</DropdownMenuLabel>
-              {NUDGE_INTERVAL_OPTIONS_MINUTES.map((minutes) => (
-                <DropdownMenuItem
-                  key={minutes}
-                  selected={nudgeIntervalMinutes === minutes}
-                  onClick={() => changeNudgeInterval(minutes)}
-                >
-                  {formatNudgeInterval(minutes)}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            size="sm"
+            variant={nudgeEnabled ? 'default' : 'outline'}
+            className={
+              nudgeEnabled
+                ? 'bg-amber-400 text-amber-950 hover:bg-amber-300 hover:opacity-100'
+                : undefined
+            }
+            onClick={() => setNudgeDialogOpen(true)}
+            title="Tab nudges: how often, and how old is stale"
+          >
+            {nudgeEnabled ? <Bell size={14} /> : <BellOff size={14} />}
+            {nudgeEnabled && (
+              <span className="rounded-full bg-amber-950/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                {formatDurationShort(nudgeIntervalMinutes)}
+              </span>
+            )}
+          </Button>
+          <NudgeSettingsDialog
+            open={nudgeDialogOpen}
+            onOpenChange={setNudgeDialogOpen}
+            enabled={nudgeEnabled}
+            onEnabledChange={changeNudgeEnabled}
+            intervalMinutes={nudgeIntervalMinutes}
+            staleMinutes={nudgeStaleMinutes}
+            onSave={saveNudgeSettings}
+          />
 
           <Button
             size="icon"

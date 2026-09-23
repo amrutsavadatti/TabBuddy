@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeSnapshot } from '@/test/factories';
+import { getManagedTabIds, setManagedTabs } from './managedTabs';
 import {
   addSnapshot,
   addSnapshots,
@@ -41,6 +42,18 @@ describe('deleteSnapshot / deleteSnapshots', () => {
     await addSnapshots([a, b]);
     await deleteSnapshot(a.id);
     expect(await getSnapshots()).toEqual([b]);
+  });
+
+  it('stops treating a deleted snapshot\'s tabs as managed', async () => {
+    const a = makeSnapshot({ name: 'A' });
+    const b = makeSnapshot({ name: 'B' });
+    await addSnapshots([a, b]);
+    await setManagedTabs(a.id, [1, 2]);
+    await setManagedTabs(b.id, [3]);
+
+    await deleteSnapshot(a.id);
+
+    expect([...(await getManagedTabIds())]).toEqual([3]);
   });
 
   it('removes multiple snapshots in a single read-modify-write (no race)', async () => {

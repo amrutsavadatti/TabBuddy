@@ -1,14 +1,29 @@
 import { openOrFocusDashboard } from '@/lib/dashboard';
 import { ensureArchivedSnapshotExists } from '@/lib/archive';
+import { unmanageTab } from '@/lib/managedTabs';
+import { clearAllWindowLinks, reconcileAfterReload } from '@/lib/reconcile';
 import { createNudgeQueue } from '@/lib/nudgeQueue';
 import { runNudgeScan } from '@/lib/nudgeRunner';
-import { getNudgeEnabled, getNudgeIntervalMinutes, NUDGE_INTERVAL_KEY } from '@/lib/nudgeSettings';
+import {
+  getNudgeEnabled,
+  getNudgeIntervalMinutes,
+  getNudgeStaleMinutes,
+  NUDGE_INTERVAL_KEY,
+} from '@/lib/nudgeSettings';
+import { ensureNudgeAlarm, NUDGE_ALARM_NAME } from '@/lib/nudgeAlarm';
 import { openNudgeForTab } from '@/lib/nudgeWindow';
-
-const NUDGE_ALARM_NAME = 'tabbuddy-nudge-scan';
 
 export default defineBackground(() => {
   ensureArchivedSnapshotExists();
+
+  // Browser launch resets window/tab ids; an extension reload/update keeps
+  // them but empties the session registry.
+  browser.runtime.onStartup.addListener(() => {
+    clearAllWindowLinks();
+  });
+  browser.runtime.onInstalled.addListener(() => {
+    reconcileAfterReload();
+  });
 
   let activeNudgeWindowId: number | null = null;
   const nudgeQueue = createNudgeQueue();
@@ -35,12 +50,17 @@ export default defineBackground(() => {
   // nudge comes up (e.g. the user closes it manually).
   browser.tabs.onRemoved.addListener((tabId) => {
     nudgeQueue.remove(tabId);
+    unmanageTab(tabId);
   });
 
   const scanAndMaybeNudge = async (inactivityThresholdMs?: number) => {
-    if (!(await getNudgeEnabled())) return;
-    const candidates = await runNudgeScan(inactivityThresholdMs);
-    nudgeQueue.enqueueMany(candidates.map((c) => c.id));
+    if (!(await getNudgeEnabled())) {
+      nudgeQueue.clear();
+      return;
+    }
+    const threshold = inactivityThresholdMs ?? (await getNudgeStaleMinutes()) * 60_000;
+    const candidates = await runNudgeScan(threshold);
+    nudgeQueue.sync(candidates.map((c) => c.id));
     await openNextInQueue();
   };
 
@@ -50,17 +70,14 @@ export default defineBackground(() => {
     }
   });
 
-  // (Re)creating an alarm with the same name replaces it, so this can be
-  // called again whenever the user changes the interval in the dashboard.
-  const createNudgeAlarm = async () => {
-    const periodInMinutes = await getNudgeIntervalMinutes();
-    browser.alarms.create(NUDGE_ALARM_NAME, { periodInMinutes });
+  const syncNudgeAlarm = async () => {
+    await ensureNudgeAlarm(await getNudgeIntervalMinutes());
   };
-  createNudgeAlarm();
+  syncNudgeAlarm();
 
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && NUDGE_INTERVAL_KEY in changes) {
-      createNudgeAlarm();
+      syncNudgeAlarm();
     }
   });
 
