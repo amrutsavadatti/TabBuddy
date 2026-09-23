@@ -19,6 +19,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  Bell,
+  BellOff,
   CheckSquare,
   ChevronDown,
   ChevronUp,
@@ -29,6 +31,7 @@ import {
   HelpCircle,
   Keyboard,
   LayoutGrid,
+  Lock,
   MousePointerClick,
   Palette,
   Pin,
@@ -56,9 +59,18 @@ import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { getDisplayOrder, SORT_OPTIONS, type SortOption } from '@/lib/sort';
 import { VIBES, getStoredVibe, setStoredVibe, type Vibe } from '@/lib/vibes';
 import { getHoverPeekEnabled, setHoverPeekEnabled } from '@/lib/peek';
+import {
+  DEFAULT_NUDGE_INTERVAL_MINUTES,
+  getNudgeEnabled,
+  getNudgeIntervalMinutes,
+  NUDGE_INTERVAL_OPTIONS_MINUTES,
+  setNudgeEnabled,
+  setNudgeIntervalMinutes,
+} from '@/lib/nudgeSettings';
 import { getHasSeenOnboarding, setHasSeenOnboarding } from '@/lib/onboarding';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
+import { ARCHIVED_ACCENT_COLOR, isArchivedSnapshot } from '@/lib/archive';
 import { formatRelativeTime } from '@/lib/relativeTime';
 import { Button } from '@/components/ui/button';
 import {
@@ -73,6 +85,14 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -86,6 +106,12 @@ function formatDate(timestamp: number): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
+}
+
+function formatNudgeInterval(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = minutes / 60;
+  return `${hours} hr${hours === 1 ? '' : 's'}`;
 }
 
 const ONBOARDING_STEPS: {
@@ -150,6 +176,13 @@ const ONBOARDING_STEPS: {
     description:
       'Hover any card to preview its tabs with favicons — everything else softly blurs to keep focus on what you\'re peeking at.',
     accent: VIBES[3]!.swatch,
+  },
+  {
+    icon: Bell,
+    title: 'Tab hoarder nudges',
+    description:
+      'On a schedule you pick (5 min to 2 hrs), TabBuddy checks for tabs you haven\'t touched in a while and nudges you to Close, Archive & Close, or Keep them. Adjust or turn it off anytime from the "Nudges" button.',
+    accent: VIBES[1]!.swatch,
   },
   {
     icon: Palette,
@@ -306,7 +339,8 @@ function SnapshotCard({
   onHoverStart?: () => void;
   onHoverEnd?: () => void;
 }) {
-  const accent = getAccentColor(snapshot.name);
+  const isArchived = isArchivedSnapshot(snapshot);
+  const accent = isArchived ? ARCHIVED_ACCENT_COLOR : getAccentColor(snapshot.name);
 
   return (
     <div
@@ -322,8 +356,19 @@ function SnapshotCard({
     >
       <div className="flex items-start justify-between gap-2">
         {selectionMode && (
-          <button onClick={onToggleSelect} className="text-primary" title="Select">
-            {selected ? <CheckSquare size={18} /> : <Square size={18} />}
+          <button
+            onClick={isArchived ? undefined : onToggleSelect}
+            className={isArchived ? 'cursor-not-allowed text-muted-foreground' : 'text-primary'}
+            title={isArchived ? "Archived can't be selected" : 'Select'}
+            disabled={isArchived}
+          >
+            {isArchived ? (
+              <Lock size={18} />
+            ) : selected ? (
+              <CheckSquare size={18} />
+            ) : (
+              <Square size={18} />
+            )}
           </button>
         )}
         {renaming ? (
@@ -484,25 +529,37 @@ function SnapshotCard({
               </ol>
             </DialogContent>
           </Dialog>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button size="icon" variant="ghost" className="text-destructive" title="Delete">
-                <Trash2 size={16} />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete "{snapshot.name}"?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This can't be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={onDelete}>Delete</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {isArchived ? (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="cursor-not-allowed text-muted-foreground"
+              title="Archived can't be deleted"
+              disabled
+            >
+              <Lock size={16} />
+            </Button>
+          ) : (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="icon" variant="ghost" className="text-destructive" title="Delete">
+                  <Trash2 size={16} />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete "{snapshot.name}"?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This can't be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={onDelete}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
@@ -572,6 +629,10 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('mfu');
   const [hoverPeekEnabled, setHoverPeekEnabledState] = useState(true);
+  const [nudgeEnabled, setNudgeEnabledState] = useState(true);
+  const [nudgeIntervalMinutes, setNudgeIntervalMinutesState] = useState(
+    DEFAULT_NUDGE_INTERVAL_MINUTES,
+  );
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [triageWindowId, setTriageWindowId] = useState<number | null>(() => {
@@ -590,6 +651,8 @@ function App() {
       document.documentElement.dataset.vibe = v;
     });
     getHoverPeekEnabled().then(setHoverPeekEnabledState);
+    getNudgeEnabled().then(setNudgeEnabledState);
+    getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
     getHasSeenOnboarding().then((seen) => {
       if (!seen) {
         setOnboardingOpen(true);
@@ -610,6 +673,19 @@ function App() {
       setHoverPeekEnabled(next);
       return next;
     });
+  };
+
+  const toggleNudge = () => {
+    setNudgeEnabledState((prev) => {
+      const next = !prev;
+      setNudgeEnabled(next);
+      return next;
+    });
+  };
+
+  const changeNudgeInterval = (minutes: number) => {
+    setNudgeIntervalMinutesState(minutes);
+    setNudgeIntervalMinutes(minutes);
   };
 
   const patchSnapshot = (id: string, changes: Partial<Snapshot>) => {
@@ -633,6 +709,7 @@ function App() {
   };
 
   const handleDelete = async (snapshot: Snapshot) => {
+    if (isArchivedSnapshot(snapshot)) return;
     await deleteSnapshot(snapshot.id);
     setSnapshots((prev) => prev.filter((s) => s.id !== snapshot.id));
   };
@@ -731,8 +808,9 @@ function App() {
   };
 
   const selectAllOrNone = () => {
+    const selectableIds = snapshots.filter((s) => !isArchivedSnapshot(s)).map((s) => s.id);
     setSelectedIds((prev) =>
-      prev.size === snapshots.length ? new Set() : new Set(snapshots.map((s) => s.id)),
+      prev.size === selectableIds.length ? new Set() : new Set(selectableIds),
     );
   };
 
@@ -744,8 +822,11 @@ function App() {
   };
 
   const deleteSelected = async () => {
-    await deleteSnapshots([...selectedIds]);
-    setSnapshots((prev) => prev.filter((s) => !selectedIds.has(s.id)));
+    const idsToDelete = snapshots
+      .filter((s) => selectedIds.has(s.id) && !isArchivedSnapshot(s))
+      .map((s) => s.id);
+    await deleteSnapshots(idsToDelete);
+    setSnapshots((prev) => prev.filter((s) => !idsToDelete.includes(s.id)));
     toggleSelectionMode();
   };
 
@@ -828,6 +909,48 @@ function App() {
             {hoverPeekEnabled ? <Eye size={14} className="mr-1" /> : <EyeOff size={14} className="mr-1" />}
             Hover peek
           </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant={nudgeEnabled ? 'default' : 'outline'}
+                className={
+                  nudgeEnabled
+                    ? 'bg-amber-400 text-amber-950 hover:bg-amber-300 hover:opacity-100'
+                    : undefined
+                }
+                title="Periodically nudge you to close, archive, or keep stale tabs"
+              >
+                {nudgeEnabled ? <Bell size={14} className="mr-1" /> : <BellOff size={14} className="mr-1" />}
+                {nudgeEnabled && (
+                  <span className="rounded-full bg-amber-950/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                    {formatNudgeInterval(nudgeIntervalMinutes)}
+                  </span>
+                )}
+                <ChevronDown size={14} className="ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={toggleNudge} selected={nudgeEnabled}>
+                <span className="flex items-center gap-2">
+                  {nudgeEnabled ? <Bell size={14} /> : <BellOff size={14} />}
+                  {nudgeEnabled ? 'Nudges on' : 'Nudges off'}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Nudge me every</DropdownMenuLabel>
+              {NUDGE_INTERVAL_OPTIONS_MINUTES.map((minutes) => (
+                <DropdownMenuItem
+                  key={minutes}
+                  selected={nudgeIntervalMinutes === minutes}
+                  onClick={() => changeNudgeInterval(minutes)}
+                >
+                  {formatNudgeInterval(minutes)}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Button
             size="icon"

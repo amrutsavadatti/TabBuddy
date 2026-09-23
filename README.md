@@ -27,6 +27,11 @@ and get them back with one click.
   everything as a JSON file — or share one with a friend.
 - **Hover to peek.** Hover a snapshot to preview its tabs (with a focus
   blur on everything else) without opening it.
+- **Tab hoarder nudges.** On a schedule you pick (5 min to 2 hrs),
+  TabBuddy checks for tabs you've left untouched and nudges you to Close,
+  Archive & Close (into a reserved, pinned "Archived" snapshot), or Keep
+  (snoozes for 2 days). Adjust the interval or turn it off anytime from
+  the dashboard's "Nudges" button.
 - **Keyboard shortcut.** `Ctrl+Shift+K` (`Cmd+Shift+K` on Mac) opens the
   dashboard from anywhere — or focuses it if it's already open.
   Customizable at `chrome://extensions/shortcuts`.

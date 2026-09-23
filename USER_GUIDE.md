@@ -19,6 +19,7 @@ extension day-to-day. (Looking to build or contribute instead? See
 - [Exporting and sharing](#exporting-and-sharing)
 - [Importing](#importing)
 - [Hover to peek](#hover-to-peek)
+- [Tab hoarder nudges](#tab-hoarder-nudges)
 - [Background vibes](#background-vibes)
 - [Keyboard shortcut](#keyboard-shortcut)
 - [Tips and things to know](#tips-and-things-to-know)
@@ -191,6 +192,27 @@ a snapshot's tabs just by hovering over its card — no need to click
 to keep your focus on the card you're peeking at. This turns off
 automatically while you're in [selection mode](#selecting-multiple-snapshots),
 since it would otherwise fight with checkbox clicking.
+
+## Tab hoarder nudges
+
+On a schedule you pick, TabBuddy quietly checks your open tabs for ones
+you haven't touched in a while (pinned and audible tabs are never nudged)
+and shows a small popup asking what to do with one of them:
+
+- **Close** — closes the tab, nothing saved.
+- **Archive & Close** — saves the tab into a reserved **Archived**
+  snapshot (created automatically, pinned by default, and can't be
+  deleted), then closes it.
+- **Keep** — snoozes that tab for 2 days before it can be nudged again.
+
+Only one popup shows at a time, and at most one per check — if several
+tabs qualify, they're nudged one at a time across later checks rather
+than all at once.
+
+Click the **Nudges** button in the dashboard header to open its dropdown:
+toggle nudges on/off, or pick how often TabBuddy checks (5 min, 10 min,
+20 min — the default, 30 min, 1 hr, or 2 hrs). Changing the interval
+takes effect on the next check.
 
 ## Background vibes
 

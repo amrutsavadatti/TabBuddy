@@ -28,6 +28,7 @@ import {
 import { generateSnapshotName, getUniqueName } from '@/lib/names';
 import { tabToSnapshotTab, type TriageTab } from '@/lib/triage';
 import { getAccentColor } from '@/lib/color';
+import { ARCHIVED_ACCENT_COLOR, isArchivedSnapshot } from '@/lib/archive';
 import { Button } from '@/components/ui/button';
 import type { Snapshot } from '@/lib/types';
 
@@ -391,7 +392,9 @@ export function TriageView({
               <DropTile
                 key={s.id}
                 id={s.id}
-                style={{ borderTopColor: getAccentColor(s.name) }}
+                style={{
+                  borderTopColor: isArchivedSnapshot(s) ? ARCHIVED_ACCENT_COLOR : getAccentColor(s.name),
+                }}
                 onClick={() => handleDropToExisting(s.id)}
               >
                 {s.name}
