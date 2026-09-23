@@ -5,8 +5,11 @@ import {
   ARCHIVED_SNAPSHOT_NAME,
   ensureArchivedSnapshotExists,
   isArchivedSnapshot,
+  isReservedSnapshotName,
+  renameSnapshot,
 } from './archive';
-import { getSnapshots } from './storage';
+import { addSnapshot, getSnapshots } from './storage';
+import { makeSnapshot } from '@/test/factories';
 import type { TriageTab } from './triage';
 
 async function makeOpenTab(props: Partial<TriageTab> = {}): Promise<TriageTab> {
@@ -93,5 +96,48 @@ describe('isArchivedSnapshot', () => {
   it('matches only the reserved Archived name', () => {
     expect(isArchivedSnapshot({ name: 'Archived' })).toBe(true);
     expect(isArchivedSnapshot({ name: 'Work stuff' })).toBe(false);
+  });
+});
+
+describe('isReservedSnapshotName', () => {
+  it('matches Archived ignoring case and surrounding spaces', () => {
+    expect(isReservedSnapshotName('Archived')).toBe(true);
+    expect(isReservedSnapshotName('  archived ')).toBe(true);
+    expect(isReservedSnapshotName('Archived (2)')).toBe(false);
+    expect(isReservedSnapshotName('Work')).toBe(false);
+  });
+});
+
+describe('renameSnapshot', () => {
+  it('renames an ordinary snapshot and trims the name', async () => {
+    const snap = makeSnapshot({ name: 'Old' });
+    await addSnapshot(snap);
+    expect(await renameSnapshot(snap.id, '  New name ')).toBe('New name');
+    expect((await getSnapshots())[0]!.name).toBe('New name');
+  });
+
+  it('leaves the name alone when given a blank one', async () => {
+    const snap = makeSnapshot({ name: 'Keep' });
+    await addSnapshot(snap);
+    expect(await renameSnapshot(snap.id, '   ')).toBe('Keep');
+    expect((await getSnapshots())[0]!.name).toBe('Keep');
+  });
+
+  it('refuses to rename the Archived snapshot', async () => {
+    await ensureArchivedSnapshotExists();
+    const [archived] = await getSnapshots();
+    await expect(renameSnapshot(archived!.id, 'Stuff')).rejects.toThrow('cannot be renamed');
+    expect((await getSnapshots())[0]!.name).toBe(ARCHIVED_SNAPSHOT_NAME);
+  });
+
+  it('refuses to give another snapshot the reserved name', async () => {
+    const snap = makeSnapshot({ name: 'Work' });
+    await addSnapshot(snap);
+    await expect(renameSnapshot(snap.id, 'archived')).rejects.toThrow('reserved');
+    expect((await getSnapshots())[0]!.name).toBe('Work');
+  });
+
+  it('rejects an unknown snapshot', async () => {
+    await expect(renameSnapshot('nope', 'X')).rejects.toThrow('no longer exists');
   });
 });

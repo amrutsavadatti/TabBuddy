@@ -9,6 +9,27 @@ export function isArchivedSnapshot(snapshot: Pick<Snapshot, 'name'>): boolean {
   return snapshot.name === ARCHIVED_SNAPSHOT_NAME;
 }
 
+/** Case-insensitive, so users can't create a confusing "archived" lookalike. */
+export function isReservedSnapshotName(name: string): boolean {
+  return name.trim().toLowerCase() === ARCHIVED_SNAPSHOT_NAME.toLowerCase();
+}
+
+/** Renames a snapshot. The Archived snapshot is identified by its name, so it
+ * can't be renamed and nothing else may take its name. A blank name leaves
+ * the snapshot unchanged. */
+export async function renameSnapshot(id: string, name: string): Promise<string> {
+  const target = (await getSnapshots()).find((s) => s.id === id);
+  if (!target) throw new Error('That snapshot no longer exists.');
+  if (isArchivedSnapshot(target)) throw new Error('The Archived snapshot cannot be renamed.');
+  const trimmed = name.trim();
+  if (!trimmed) return target.name;
+  if (isReservedSnapshotName(trimmed)) {
+    throw new Error('"Archived" is reserved for TabBuddy\'s archive. Please choose another name.');
+  }
+  await updateSnapshot(id, { name: trimmed, updatedAt: Date.now() });
+  return trimmed;
+}
+
 /** Idempotent — safe to call on every background script start. Guarantees
  * the reserved "Archived" snapshot exists even for installs that predate
  * this feature. */

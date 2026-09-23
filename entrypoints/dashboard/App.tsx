@@ -96,7 +96,7 @@ import {
 import { getHasSeenOnboarding, setHasSeenOnboarding } from '@/lib/onboarding';
 import type { Category, Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
-import { ARCHIVED_ACCENT_COLOR, isArchivedSnapshot } from '@/lib/archive';
+import { ARCHIVED_ACCENT_COLOR, isArchivedSnapshot, renameSnapshot } from '@/lib/archive';
 import { formatRelativeTime } from '@/lib/relativeTime';
 import { Button } from '@/components/ui/button';
 import {
@@ -417,6 +417,8 @@ function SnapshotCard({
               Save
             </Button>
           </div>
+        ) : isArchived ? (
+          <span className="text-left text-lg font-semibold tracking-tight">{snapshot.name}</span>
         ) : (
           <button
             className="text-left text-lg font-semibold tracking-tight hover:underline"
@@ -827,10 +829,13 @@ function App() {
   };
 
   const confirmRename = async (snapshot: Snapshot) => {
-    const name = renameValue.trim() || snapshot.name;
-    await updateSnapshot(snapshot.id, { name, updatedAt: Date.now() });
-    patchSnapshot(snapshot.id, { name });
-    setRenamingId(null);
+    try {
+      const name = await renameSnapshot(snapshot.id, renameValue);
+      patchSnapshot(snapshot.id, { name });
+      setRenamingId(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Couldn't rename that snapshot.");
+    }
   };
 
   const removeTab = async (snapshot: Snapshot, tabIndex: number) => {
