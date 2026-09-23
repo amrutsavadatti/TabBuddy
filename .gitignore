@@ -25,4 +25,4 @@ web-ext.config.ts
 *.sln
 *.sw?
 
-Website/*
+/Website/
