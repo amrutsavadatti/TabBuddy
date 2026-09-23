@@ -20,15 +20,12 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   Bell,
-  BellOff,
   CheckSquare,
   ChevronDown,
   ChevronUp,
   Download,
   Eye,
-  EyeOff,
   GripVertical,
-  HelpCircle,
   Keyboard,
   LayoutGrid,
   Leaf,
@@ -40,10 +37,10 @@ import {
   RefreshCw,
   Save,
   Search,
+  Settings,
   Shuffle,
   Square,
   Trash2,
-  Upload,
   X,
 } from 'lucide-react';
 import {
@@ -71,8 +68,8 @@ import {
   setNudgeIntervalMinutes,
   setNudgeStaleMinutes,
 } from '@/lib/nudgeSettings';
-import { formatDurationShort } from '@/lib/duration';
 import { NudgeSettingsDialog } from './NudgeSettingsDialog';
+import { SettingsBar } from './SettingsBar';
 import { getHasSeenOnboarding, setHasSeenOnboarding } from '@/lib/onboarding';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
@@ -173,14 +170,14 @@ const ONBOARDING_STEPS: {
     icon: Leaf,
     title: 'Lazy-loaded tabs',
     description:
-      'Opening a snapshot loads only the first tab. The rest wait as light placeholders (domain, page title, full URL) and load when you switch to them. Turn it off with the leaf button.',
+      'Opening a snapshot loads only the first tab. The rest wait as light placeholders (domain, page title, full URL) and load when you switch to them. Turn it off in the settings bar (the gear at the top right).',
     accent: VIBES[2]!.swatch,
   },
   {
     icon: Bell,
     title: 'Tab hoarder nudges',
     description:
-      'TabBuddy checks on a schedule you pick for tabs you haven\'t touched in as long as you say, then nudges you to Close, Archive & Close, or Keep them. Tune both settings or turn it off from the yellow bell button.',
+      'TabBuddy checks on a schedule you pick for tabs you haven\'t touched in as long as you say, then nudges you to Close, Archive & Close, or Keep them. Tune both settings or turn it off from the settings bar (the gear at the top right).',
     accent: VIBES[1]!.swatch,
   },
   {
@@ -635,6 +632,7 @@ function App() {
   );
   const [nudgeStaleMinutes, setNudgeStaleMinutesState] = useState(DEFAULT_NUDGE_STALE_MINUTES);
   const [nudgeDialogOpen, setNudgeDialogOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [triageWindowId, setTriageWindowId] = useState<number | null>(() => {
@@ -897,86 +895,12 @@ function App() {
 
   return (
     <div className="mx-auto max-w-6xl p-6 md:p-8">
-      <div className={`mb-6 flex flex-wrap items-center justify-between gap-3 ${chromeBlurClass}`}>
+      <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 ${chromeBlurClass}`}>
         <div className="flex items-center gap-2">
           <img src={dashboardIcon} alt="" className="h-12 w-12" />
           <h1 className="text-2xl font-semibold">TabBuddy Dashboard</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            {VIBES.map((v) => (
-              <button
-                key={v.id}
-                title={v.label}
-                onClick={() => handleVibeChange(v.id)}
-                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
-                  vibe === v.id ? 'border-foreground' : 'border-transparent'
-                }`}
-                style={{ backgroundImage: v.swatch }}
-              />
-            ))}
-          </div>
-
-          <Button
-            size="sm"
-            variant={hoverPeekEnabled ? 'default' : 'outline'}
-            onClick={toggleHoverPeek}
-            title="Hover over a card to peek its tabs"
-          >
-            {hoverPeekEnabled ? <Eye size={14} className="mr-1" /> : <EyeOff size={14} className="mr-1" />}
-            Hover peek
-          </Button>
-
-          <Button
-            size="sm"
-            variant={lazyRestoreEnabled ? 'default' : 'outline'}
-            onClick={toggleLazyRestore}
-            title={
-              lazyRestoreEnabled
-                ? 'Lazy tabs on: opening a snapshot loads only the first tab; the rest load when you switch to them'
-                : 'Lazy tabs off: opening a snapshot loads every tab'
-            }
-          >
-            <Leaf size={14} />
-          </Button>
-
-          <Button
-            size="sm"
-            variant={nudgeEnabled ? 'default' : 'outline'}
-            className={
-              nudgeEnabled
-                ? 'bg-amber-400 text-amber-950 hover:bg-amber-300 hover:opacity-100'
-                : undefined
-            }
-            onClick={() => setNudgeDialogOpen(true)}
-            title="Tab nudges: how often, and how old is stale"
-          >
-            {nudgeEnabled ? <Bell size={14} /> : <BellOff size={14} />}
-            {nudgeEnabled && (
-              <span className="rounded-full bg-amber-950/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none">
-                {formatDurationShort(nudgeIntervalMinutes)}
-              </span>
-            )}
-          </Button>
-          <NudgeSettingsDialog
-            open={nudgeDialogOpen}
-            onOpenChange={setNudgeDialogOpen}
-            enabled={nudgeEnabled}
-            onEnabledChange={changeNudgeEnabled}
-            intervalMinutes={nudgeIntervalMinutes}
-            staleMinutes={nudgeStaleMinutes}
-            onSave={saveNudgeSettings}
-          />
-
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setOnboardingOpen(true)}
-            title="Help / tutorial"
-          >
-            <HelpCircle size={16} />
-          </Button>
-
+        <div className="flex flex-wrap items-center justify-end gap-3">
           {selectionMode ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-muted-foreground">
@@ -1014,39 +938,62 @@ function App() {
               </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={toggleSelectionMode}>
-                <CheckSquare size={14} className="mr-1" /> Select
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => downloadSnapshotsAsFile(snapshots)}
-                disabled={snapshots.length === 0}
-              >
-                <Download size={14} className="mr-1" /> Export all
-              </Button>
-              <label>
-                <Button size="sm" variant="outline" asChild>
-                  <span>
-                    <Upload size={14} className="mr-1" /> Import
-                  </span>
-                </Button>
-                <input
-                  type="file"
-                  accept="application/json"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleImportFile(file);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            </div>
+            <Button size="sm" variant="outline" onClick={toggleSelectionMode}>
+              <CheckSquare size={14} className="mr-1" /> Select
+            </Button>
           )}
+
+          <div className="flex items-center gap-1.5">
+            {VIBES.map((v) => (
+              <button
+                key={v.id}
+                title={v.label}
+                onClick={() => handleVibeChange(v.id)}
+                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
+                  vibe === v.id ? 'border-foreground' : 'border-transparent'
+                }`}
+                style={{ backgroundImage: v.swatch }}
+              />
+            ))}
+          </div>
+
+          <Button
+            size="icon"
+            variant={settingsOpen ? 'default' : 'outline'}
+            onClick={() => setSettingsOpen((open) => !open)}
+            title="Settings"
+            aria-label="Settings"
+            aria-expanded={settingsOpen}
+          >
+            <Settings size={16} />
+          </Button>
         </div>
       </div>
+
+      <SettingsBar
+        open={settingsOpen}
+        className={chromeBlurClass}
+        hoverPeekEnabled={hoverPeekEnabled}
+        onToggleHoverPeek={toggleHoverPeek}
+        lazyRestoreEnabled={lazyRestoreEnabled}
+        onToggleLazyRestore={toggleLazyRestore}
+        nudgeEnabled={nudgeEnabled}
+        nudgeIntervalMinutes={nudgeIntervalMinutes}
+        onOpenNudgeSettings={() => setNudgeDialogOpen(true)}
+        canExport={snapshots.length > 0}
+        onExportAll={() => downloadSnapshotsAsFile(snapshots)}
+        onImportFile={handleImportFile}
+        onOpenTutorial={() => setOnboardingOpen(true)}
+      />
+      <NudgeSettingsDialog
+        open={nudgeDialogOpen}
+        onOpenChange={setNudgeDialogOpen}
+        enabled={nudgeEnabled}
+        onEnabledChange={changeNudgeEnabled}
+        intervalMinutes={nudgeIntervalMinutes}
+        staleMinutes={nudgeStaleMinutes}
+        onSave={saveNudgeSettings}
+      />
 
       {snapshots.length > 0 && (
         <div className={`mb-6 flex flex-wrap items-center gap-3 ${chromeBlurClass}`}>

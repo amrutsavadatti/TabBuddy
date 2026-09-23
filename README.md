@@ -30,12 +30,12 @@ and get them back with one click.
 - **Lazy-loaded restore.** Opening a big snapshot loads only the first
   tab; the rest open as light placeholders showing `domain – page title`
   and the full URL, and load when you switch to them. Toggle it from the
-  dashboard's leaf button.
+  dashboard's settings bar.
 - **Tab hoarder nudges.** TabBuddy checks on a schedule you set for tabs
   you've left untouched (you choose what "stale" means), and nudges you to
   Close, Archive & Close (into a reserved, pinned "Archived" snapshot), or
   Keep (snoozes for 2 days). Set how often and how old is stale, in
-  minutes, hours, or days, from the yellow bell button in the dashboard.
+  minutes, hours, or days, from the dashboard's settings bar.
 - **Keyboard shortcut.** `Ctrl+Shift+K` (`Cmd+Shift+K` on Mac) opens the
   dashboard from anywhere — or focuses it if it's already open.
   Customizable at `chrome://extensions/shortcuts`.

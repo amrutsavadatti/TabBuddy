@@ -91,8 +91,8 @@ Things to know:
   page, never the placeholder, so your snapshots stay correct.
 - `chrome://` and `file://` tabs can't be opened by a placeholder, so they
   always load normally.
-- Prefer everything loaded up front? Click the **leaf** button in the
-  dashboard header to turn lazy tabs off (it's filled when on). It only
+- Prefer everything loaded up front? Turn off **Lazy loading** in the
+  settings bar (click the gear at the top right of the dashboard). It only
   affects snapshots you open afterward.
 
 ## Native Chrome tab groups
@@ -198,7 +198,7 @@ TabBuddy can export snapshots as a `.json` file, three ways:
 - **Single snapshot:** click the download icon on any card.
 - **Multiple snapshots:** use [Select mode](#selecting-multiple-snapshots)
   and click "Export selected".
-- **Everything:** click "Export all" in the header.
+- **Everything:** open the gear's settings bar and click **Export all**.
 
 This is how you back up your snapshots, move them to another computer, or
 **share a specific saved window with a friend** — just send them the
@@ -206,7 +206,7 @@ downloaded file.
 
 ## Importing
 
-Click **Import** in the dashboard header and choose a `.json` file
+Open the gear's settings bar, click **Import**, and choose a `.json` file
 (one you exported yourself, or one someone shared with you). TabBuddy
 adds each snapshot in the file as new entries — it never overwrites or
 merges with existing snapshots. Personal stats like usage count, pin
@@ -216,7 +216,7 @@ saved snapshot.
 
 ## Hover to peek
 
-Toggle **Hover peek** in the dashboard header (on by default) to preview
+Toggle **Hover peek** in the dashboard's settings bar (on by default) to preview
 a snapshot's tabs just by hovering over its card — no need to click
 "Show tabs". While hovering, everything else on the page softly blurs out
 to keep your focus on the card you're peeking at. This turns off
@@ -239,7 +239,7 @@ Only one popup shows at a time, and at most one per check — if several
 tabs qualify, they're nudged one at a time across later checks rather
 than all at once.
 
-Click the yellow bell button in the dashboard header to open the nudge
+Open the gear's settings bar and click **Nudges** to open the nudge
 settings. There are two tabs, each taking a number plus a unit (minutes,
 hours, or days):
 
