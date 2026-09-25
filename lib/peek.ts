@@ -1,4 +1,4 @@
-const PEEK_STORAGE_KEY = 'hoverPeekEnabled';
+export const PEEK_STORAGE_KEY = 'hoverPeekEnabled';
 
 export async function getHoverPeekEnabled(): Promise<boolean> {
   const result = await browser.storage.local.get(PEEK_STORAGE_KEY);

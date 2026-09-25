@@ -4,7 +4,7 @@ import { getUniqueName } from './names';
 import { getSnapshots, updateSnapshot, updateSnapshots } from './storage';
 import type { Category, Snapshot } from './types';
 
-const CATEGORIES_KEY = 'categories';
+export const CATEGORIES_KEY = 'categories';
 
 export async function getCategories(): Promise<Category[]> {
   const result = await browser.storage.local.get(CATEGORIES_KEY);

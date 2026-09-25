@@ -1,4 +1,4 @@
-const LAZY_RESTORE_KEY = 'lazyRestoreEnabled';
+export const LAZY_RESTORE_KEY = 'lazyRestoreEnabled';
 
 export async function getLazyRestoreEnabled(): Promise<boolean> {
   const result = await browser.storage.local.get(LAZY_RESTORE_KEY);

@@ -1,4 +1,4 @@
-const NUDGE_ENABLED_KEY = 'nudgeEnabled';
+export const NUDGE_ENABLED_KEY = 'nudgeEnabled';
 export const NUDGE_INTERVAL_KEY = 'nudgeIntervalMinutes';
 export const NUDGE_STALE_KEY = 'nudgeStaleMinutes';
 

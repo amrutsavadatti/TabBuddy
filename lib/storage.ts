@@ -1,13 +1,17 @@
 import { unmanageSnapshots } from './managedTabs';
 import type { Snapshot } from './types';
 
-const SNAPSHOTS_KEY = 'snapshots';
+export const SNAPSHOTS_KEY = 'snapshots';
+
+/** Snapshots saved before categories existed have no categoryIds. */
+export function normalizeSnapshots(raw: unknown): Snapshot[] {
+  const stored = Array.isArray(raw) ? (raw as Snapshot[]) : [];
+  return stored.map((s) => ({ ...s, categoryIds: s.categoryIds ?? [] }));
+}
 
 export async function getSnapshots(): Promise<Snapshot[]> {
   const result = await browser.storage.local.get(SNAPSHOTS_KEY);
-  const stored = (result[SNAPSHOTS_KEY] as Snapshot[] | undefined) ?? [];
-  // Snapshots saved before categories existed have no categoryIds.
-  return stored.map((s) => ({ ...s, categoryIds: s.categoryIds ?? [] }));
+  return normalizeSnapshots(result[SNAPSHOTS_KEY]);
 }
 
 export async function addSnapshot(snapshot: Snapshot): Promise<void> {

@@ -35,7 +35,7 @@ Only http(s) targets are ever followed.
 "Load this page" is clicked, and that clicking a tab alone does not load it.
 **Commit:** `fix: make lazy tabs load only when the Load button is clicked`
 
-### 🔲 Slice D2 — Dashboard updates live
+### ✅ Slice D2 — Dashboard updates live
 **Problem:** the dashboard reads storage once on open, so a snapshot saved
 from the popup (or a nudge's Archive & Close) doesn't appear until refresh.
 **Build:** the dashboard listens to `storage.onChanged` and reloads

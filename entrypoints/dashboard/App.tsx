@@ -78,6 +78,7 @@ import { SettingsBar } from './SettingsBar';
 import { CategoryChips, CategoryPicker } from './CategoryPicker';
 import { BulkCategoryDialog, CATEGORY_DROP_PREFIX, CategoryDropStrip } from './CategoryTools';
 import { CategoriesView, UNCATEGORIZED_COLOR, UNCATEGORIZED_ID } from './CategoriesView';
+import { interpretStorageChange } from '@/lib/liveStorage';
 import { getDashboardView, setDashboardView, type DashboardView } from '@/lib/dashboardView';
 import {
   addCategories,
@@ -755,6 +756,29 @@ function App() {
         setHasSeenOnboarding(true);
       }
     });
+  }, []);
+
+  // Keep this dashboard in step with changes made elsewhere (the popup, a
+  // nudge's Archive & Close, another dashboard tab) without a refresh.
+  useEffect(() => {
+    const onChanged = (
+      changes: Record<string, { newValue?: unknown }>,
+      area: string,
+    ) => {
+      const change = interpretStorageChange(changes, area);
+      if (!change) return;
+      if (change.snapshots) setSnapshots(change.snapshots);
+      if (change.categories) setCategories(change.categories);
+      if (change.settings) {
+        getHoverPeekEnabled().then(setHoverPeekEnabledState);
+        getLazyRestoreEnabled().then(setLazyRestoreEnabledState);
+        getNudgeEnabled().then(setNudgeEnabledState);
+        getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
+        getNudgeStaleMinutes().then(setNudgeStaleMinutesState);
+      }
+    };
+    browser.storage.onChanged.addListener(onChanged);
+    return () => browser.storage.onChanged.removeListener(onChanged);
   }, []);
 
   const handleVibeChange = (v: Vibe) => {
