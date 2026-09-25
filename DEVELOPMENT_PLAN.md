@@ -14,6 +14,54 @@ Each slice ends with:
 
 ---
 
+## Track E — Less annoying nudges (in progress)
+
+**Problem:** the nudge feature can pile up. The "only one popup at a time"
+rule lives in a variable inside the background service worker, which Chrome
+restarts after ~30s idle, so every scan forgets that a popup is already
+open. A popup left unanswered (e.g. overnight) is not snoozed, so the same
+tab gets asked about again on every tick. Snoozes are also keyed by Chrome
+tab id, which resets on browser restart.
+
+**Rules:** while a nudge popup is open (unanswered), no new nudge appears.
+It ends when the user decides (Close / Archive & Close / Keep) or dismisses
+the window; the next nudge then comes on a later tick, not immediately.
+
+### ✅ Slice E1 — One popup at a time, for real
+**Build:** Before showing a nudge, ask Chrome which windows are open and skip
+if one is already showing the nudge page (no in-memory state to lose).
+Auto-close a popup whose tab has been closed, or that the user has opened
+themselves, so it can never block later nudges. Choose candidates by least
+recently asked (stored per tab in session storage), so a dismissed tab goes
+to the back of the line instead of returning on the next tick. The old
+in-memory queue is removed; the scan's ordered candidate list replaces it.
+**Test:** Unit tests for the "is a nudge open" check, the auto-close rules,
+and the least-recently-asked ordering. Manual: leave a popup open across
+several intervals and confirm no second popup appears; dismiss it and
+confirm the next tick shows a different tab.
+**Commit:** `fix: never open a second nudge while one is open`
+
+### 🔲 Slice E2 — No nudges while the user is away
+**Build:** Use Chrome's idle detection (adds the `idle` permission, which
+has no install warning). Nothing is shown while the device is idle or
+locked. When the user returns, wait one full interval before the first
+nudge, so opening the laptop after a long absence does not trigger an
+immediate popup.
+**Test:** Unit tests for the idle gate and the return-from-idle delay.
+Manual: lock the screen past an interval and confirm no popup appears until
+one full interval after unlocking.
+**Commit:** `feat: pause nudges while the device is idle and delay after return`
+
+### 🔲 Slice E3 — Snoozes that survive a browser restart
+**Build:** Store "Keep" snoozes by the tab's address instead of its Chrome
+tab id, so a restart neither drops a kept tab's snooze nor applies it to an
+unrelated tab. Existing id-based snoozes are discarded once on upgrade.
+**Test:** Unit tests: a snooze follows the address, expires after 2 days,
+and one tab's snooze does not affect a different address.
+**Commit:** `fix: key nudge snoozes by URL so they survive restarts`
+
+---
+
 ## Track D — Bug fixes from tester feedback (done)
 
 Ordered by impact: D1 is broken for real users on Linux; the rest are

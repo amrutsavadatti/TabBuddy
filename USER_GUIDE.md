@@ -272,9 +272,12 @@ and shows a small popup asking what to do with one of them:
   deleted), then closes it.
 - **Keep** — snoozes that tab for 2 days before it can be nudged again.
 
-Only one popup shows at a time, and at most one per check — if several
-tabs qualify, they're nudged one at a time across later checks rather
-than all at once.
+Only one popup is ever open at a time. While a nudge is waiting for you,
+no new one appears — TabBuddy only moves on once you pick an option or
+dismiss the window. If you close the tab yourself, or open it, its popup
+closes on its own. Nudges then come at most one per check, so several
+stale tabs are asked about one at a time. A tab you dismissed goes to the
+back of the line rather than coming straight back.
 
 Open the gear's settings bar and click **Nudges** to open the nudge
 settings. There are two tabs, each taking a number plus a unit (minutes,

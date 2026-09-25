@@ -2,7 +2,7 @@ import { openOrFocusDashboard } from '@/lib/dashboard';
 import { ensureArchivedSnapshotExists } from '@/lib/archive';
 import { unmanageTab } from '@/lib/managedTabs';
 import { clearAllWindowLinks, reconcileAfterReload } from '@/lib/reconcile';
-import { createNudgeQueue } from '@/lib/nudgeQueue';
+import { forgetAsked, getAskedMap, orderByLeastRecentlyAsked } from '@/lib/nudgeAsked';
 import { runNudgeScan } from '@/lib/nudgeRunner';
 import {
   getNudgeEnabled,
@@ -11,7 +11,7 @@ import {
   NUDGE_INTERVAL_KEY,
 } from '@/lib/nudgeSettings';
 import { ensureNudgeAlarm, NUDGE_ALARM_NAME } from '@/lib/nudgeAlarm';
-import { openNudgeForTab } from '@/lib/nudgeWindow';
+import { closeNudgesFor, openNextNudge } from '@/lib/nudgeWindow';
 
 export default defineBackground(() => {
   ensureArchivedSnapshotExists();
@@ -25,43 +25,28 @@ export default defineBackground(() => {
     reconcileAfterReload();
   });
 
-  let activeNudgeWindowId: number | null = null;
-  const nudgeQueue = createNudgeQueue();
-
-  // At most one nudge popup at a time, and at most one per scan (every
-  // NUDGE_SCAN_PERIOD_MINUTES) — closing a popup does NOT immediately open
-  // the next queued tab. Extra candidates found in a scan just wait in the
-  // queue for a later scan, one tab per tick.
-  const openNextInQueue = async () => {
-    if (activeNudgeWindowId !== null) return;
-    const nextId = nudgeQueue.dequeue();
-    if (nextId === undefined) return;
-    const windowId = await openNudgeForTab(nextId);
-    activeNudgeWindowId = windowId ?? null;
-  };
-
-  browser.windows.onRemoved.addListener((windowId) => {
-    if (windowId === activeNudgeWindowId) {
-      activeNudgeWindowId = null;
-    }
-  });
-
-  // Drop a tab from the queue if it's closed some other way before its
-  // nudge comes up (e.g. the user closes it manually).
+  // Tabs closed (or opened by the user) while a nudge is asking about them:
+  // close that nudge so it can never block the next one.
   browser.tabs.onRemoved.addListener((tabId) => {
-    nudgeQueue.remove(tabId);
+    closeNudgesFor(tabId);
     unmanageTab(tabId);
+    forgetAsked(tabId);
+  });
+  browser.tabs.onActivated.addListener(({ tabId }) => {
+    closeNudgesFor(tabId);
   });
 
   const scanAndMaybeNudge = async (inactivityThresholdMs?: number) => {
-    if (!(await getNudgeEnabled())) {
-      nudgeQueue.clear();
-      return;
-    }
+    if (!(await getNudgeEnabled())) return;
     const threshold = inactivityThresholdMs ?? (await getNudgeStaleMinutes()) * 60_000;
     const candidates = await runNudgeScan(threshold);
-    nudgeQueue.sync(candidates.map((c) => c.id));
-    await openNextInQueue();
+    // Least recently asked first, so a dismissed tab goes to the back of the
+    // line. openNextNudge does nothing while a nudge popup is already open.
+    const ordered = orderByLeastRecentlyAsked(
+      candidates.map((c) => c.id),
+      await getAskedMap(),
+    );
+    await openNextNudge(ordered);
   };
 
   browser.commands.onCommand.addListener((command) => {
