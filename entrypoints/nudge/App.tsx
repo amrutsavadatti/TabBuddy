@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { snoozeTab } from '@/lib/nudgeState';
+import { snoozeUrl } from '@/lib/nudgeState';
 import { archiveTab } from '@/lib/archive';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
@@ -73,7 +73,7 @@ function App() {
 
   const handleKeep = async () => {
     if (!tab) return;
-    await snoozeTab(tab.id);
+    await snoozeUrl(tab.url);
     window.close();
   };
 

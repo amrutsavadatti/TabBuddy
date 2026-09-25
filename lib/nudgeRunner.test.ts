@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { setManagedTabs } from './managedTabs';
-import { snoozeTab } from './nudgeState';
+import { snoozeUrl } from './nudgeState';
 import { runNudgeScan } from './nudgeRunner';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -39,9 +39,24 @@ describe('runNudgeScan', () => {
     expect(result.map((t) => t.id)).toEqual([5]);
   });
 
+  it('skips every open tab on a snoozed address, even duplicates in other windows', async () => {
+    mockTabs([staleTab(1, 'https://same.com/x'), staleTab(2, 'https://same.com/x'), staleTab(3)]);
+    await snoozeUrl('https://same.com/x');
+    const result = await runNudgeScan();
+    expect(result.map((t) => t.id)).toEqual([3]);
+  });
+
+  it('still skips a snoozed page after the browser restarts and tab ids change', async () => {
+    await snoozeUrl('https://t1.com/');
+    // same page, but Chrome has handed it a different tab id
+    mockTabs([staleTab(500, 'https://t1.com/'), staleTab(501)]);
+    const result = await runNudgeScan();
+    expect(result.map((t) => t.id)).toEqual([501]);
+  });
+
   it('skips snoozed tabs', async () => {
     mockTabs([staleTab(1), staleTab(2)]);
-    await snoozeTab(1);
+    await snoozeUrl('https://t1.com/');
     const result = await runNudgeScan();
     expect(result.map((t) => t.id)).toEqual([2]);
   });

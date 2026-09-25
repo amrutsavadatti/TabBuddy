@@ -14,7 +14,7 @@ Each slice ends with:
 
 ---
 
-## Track E — Less annoying nudges (in progress)
+## Track E — Less annoying nudges (done)
 
 **Problem:** the nudge feature can pile up. The "only one popup at a time"
 rule lives in a variable inside the background service worker, which Chrome
@@ -52,7 +52,7 @@ Manual: lock the screen past an interval and confirm no popup appears until
 one full interval after unlocking.
 **Commit:** `feat: pause nudges while the device is idle and delay after return`
 
-### 🔲 Slice E3 — Snoozes that survive a browser restart
+### ✅ Slice E3 — Snoozes that survive a browser restart
 **Build:** Store "Keep" snoozes by the tab's address instead of its Chrome
 tab id, so a restart neither drops a kept tab's snooze nor applies it to an
 unrelated tab. Existing id-based snoozes are discarded once on upgrade.

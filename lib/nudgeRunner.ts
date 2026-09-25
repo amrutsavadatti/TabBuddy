@@ -1,7 +1,7 @@
 import { DEFAULT_INACTIVITY_THRESHOLD_MS } from './importance';
 import { getManagedTabIds } from './managedTabs';
 import { findNudgeCandidates, type ScanTab } from './nudgeScan';
-import { isTabSnoozed, pruneExpiredSnoozes } from './nudgeState';
+import { getSnoozedKeys, pruneExpiredSnoozes, snoozeKey } from './nudgeState';
 
 export interface NudgeCandidate {
   id: number;
@@ -35,11 +35,9 @@ export async function runNudgeScan(
       audible: tab.audible,
     }));
 
-  const snoozedFlags = await Promise.all(
-    scanTabs.map((tab) => isTabSnoozed(tab.id, now)),
-  );
+  const snoozedKeys = await getSnoozedKeys(now);
   const snoozedIds = new Set(
-    scanTabs.filter((_, i) => snoozedFlags[i]).map((tab) => tab.id),
+    scanTabs.filter((tab) => snoozedKeys.has(snoozeKey(tab.url))).map((tab) => tab.id),
   );
 
   // Tabs owned by a snapshot are never nudged: closing one would silently

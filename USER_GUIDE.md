@@ -270,7 +270,9 @@ and shows a small popup asking what to do with one of them:
 - **Archive & Close** — saves the tab into a reserved **Archived**
   snapshot (created automatically, pinned by default, and can't be
   deleted), then closes it.
-- **Keep** — snoozes that tab for 2 days before it can be nudged again.
+- **Keep** — snoozes that page for 2 days before it can be nudged again.
+  The snooze is remembered by the page's address, so it survives a browser
+  restart and also covers any other tab open on the same page.
 
 Only one popup is ever open at a time. While a nudge is waiting for you,
 no new one appears — TabBuddy only moves on once you pick an option or
