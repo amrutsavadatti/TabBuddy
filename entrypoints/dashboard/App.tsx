@@ -200,7 +200,7 @@ const ONBOARDING_STEPS: {
     icon: Leaf,
     title: 'Lazy-loaded tabs',
     description:
-      'Opening a snapshot loads only the first tab. The rest wait as light placeholders (domain, page title, full URL) and load when you switch to them. Turn it off in the settings bar (the gear at the top right).',
+      'Opening a snapshot loads only the first tab. The rest wait as light placeholders (domain, page title, full URL) and load only when you click Load this page. Turn it off in the settings bar (the gear at the top right).',
     accent: VIBES[2]!.swatch,
   },
   {

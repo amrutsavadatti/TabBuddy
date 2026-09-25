@@ -105,7 +105,7 @@ export function SettingsBar({
             tone="green"
             title={
               lazyRestoreEnabled
-                ? 'Opening a snapshot loads only the first tab; the rest load when you switch to them'
+                ? 'Opening a snapshot loads only the first tab; the rest wait until you click Load on them'
                 : 'Opening a snapshot loads every tab'
             }
             onClick={onToggleLazyRestore}

@@ -81,8 +81,9 @@ shows:
 - the saved favicon, and
 - the full saved URL.
 
-The real page loads the moment you **switch to that tab** — or click
-**Load now** on the placeholder. Tabs you never touch never load.
+The real page loads only when you click **Load this page** on the
+placeholder. Nothing loads by itself, on any operating system, so tabs you
+never open never cost you memory.
 
 Things to know:
 

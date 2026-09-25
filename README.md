@@ -33,7 +33,7 @@ and get them back with one click.
   bulk-tag a selection. Categories travel with exports and imports.
 - **Lazy-loaded restore.** Opening a big snapshot loads only the first
   tab; the rest open as light placeholders showing `domain – page title`
-  and the full URL, and load when you switch to them. Toggle it from the
+  and the full URL, and load only when you click Load. Toggle it from the
   dashboard's settings bar.
 - **Tab hoarder nudges.** TabBuddy checks on a schedule you set for tabs
   you've left untouched (you choose what "stale" means), and nudges you to

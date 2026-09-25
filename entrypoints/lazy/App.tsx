@@ -34,12 +34,6 @@ function App() {
       link.href = favIconUrl;
       document.head.appendChild(link);
     }
-    if (document.visibilityState === 'visible') load();
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') load();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
   const accent = getAccentColor(hostname);
@@ -62,10 +56,10 @@ function App() {
         {title && <p className="line-clamp-2 text-sm font-medium">{title}</p>}
         <p className="w-full break-all text-xs text-muted-foreground">{url}</p>
         <p className="text-xs text-muted-foreground">
-          Not loaded yet to save memory. It opens when you switch to this tab.
+          Not loaded yet, to save memory. Click the button to open this page.
         </p>
         <Button onClick={load} disabled={!url}>
-          Load now
+          Load this page
         </Button>
       </div>
     </div>

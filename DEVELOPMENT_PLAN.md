@@ -14,6 +14,63 @@ Each slice ends with:
 
 ---
 
+## Track D — Bug fixes from tester feedback (in progress)
+
+Ordered by impact: D1 is broken for real users on Linux; the rest are
+polish/annoyances.
+
+### ✅ Slice D1 — Lazy loading that works the same on every OS
+**Problem:** on some Linux setups every lazy placeholder loaded its real page
+immediately (all tabs at once). The placeholder page decided to load from
+`document.visibilityState` at open time, and background tabs do not
+reliably report "hidden" on every OS/window manager. (A first fix that
+loaded on tab activation from the background script also misbehaved on
+macOS and was dropped.)
+**Build:** loading is now purely manual. The placeholder never loads
+anything by itself: it shows the domain, title, favicon and full URL, and
+loads the real page only when the user clicks "Load this page". With no
+visibility or activation logic left, behaviour cannot differ between OSes.
+Only http(s) targets are ever followed.
+**Test:** Manual: open a big snapshot on each OS, confirm nothing loads until
+"Load this page" is clicked, and that clicking a tab alone does not load it.
+**Commit:** `fix: make lazy tabs load only when the Load button is clicked`
+
+### 🔲 Slice D2 — Dashboard updates live
+**Problem:** the dashboard reads storage once on open, so a snapshot saved
+from the popup (or a nudge's Archive & Close) doesn't appear until refresh.
+**Build:** the dashboard listens to `storage.onChanged` and reloads
+snapshots, categories, and settings when they change from anywhere, without
+clobbering its own in-progress edits (e.g. drag-reordering pinned cards).
+**Test:** Unit tests for the change filter. Manual: open the dashboard,
+save a window from the popup, confirm the card appears; change a setting in
+a second dashboard tab and confirm it follows.
+**Commit:** `fix: refresh the dashboard when stored data changes`
+
+### 🔲 Slice D3 — Whole left strip deletes in "Sort tabs one by one"
+**Problem:** only the small red icon is a drop target, so dropping a card
+anywhere else in the left strip does nothing.
+**Build:** the entire left strip is the drop target. The red icon (and the
+strip) react whenever a card is dragged over any part of it: icon grows and
+turns solid red, strip highlights. Clicking the icon still deletes.
+**Test:** Manual: drag a card to the top, middle and bottom of the left
+strip and confirm each deletes and the icon reacts while hovering.
+**Commit:** `fix: make the whole left strip a delete target when sorting tabs`
+
+### 🔲 Slice D4 — Hover peek as a floating panel
+**Problem:** the peek list renders below the card, pushes content around
+and can run off the page.
+**Build:** render it as a fixed-position floating panel in a portal, on top
+of the other cards and out of the layout. It is centred on the hovered
+card, kept fully inside the viewport (flipping/shifting when the card is
+near an edge), with a small pointer tying it to the card, and never blocks
+the mouse.
+**Test:** Manual: hover cards in the first and last row/column and in a
+narrow window; confirm the panel is always fully visible and layout never
+shifts.
+**Commit:** `fix: show hover peek as a floating panel over the grid`
+
+---
+
 ## Track C — Categories (done)
 
 **Idea:** users create categories and tag snapshots with them. A snapshot can
@@ -138,7 +195,7 @@ tabs are already protected from nudges by Track A.
 **Build:** Opening a snapshot loads only the first tab for real. Every other
 http(s) tab opens as a lightweight placeholder page (`lazy.html`) showing
 the domain, saved title and favicon; it loads the real link when the user
-switches to that tab (or clicks "Load now"). Save, Update, Group by site
+clicks "Load this page". Save, Update, Group by site
 and Sort tabs see through the placeholder, so it is never saved as a tab's
 URL. (An earlier attempt used `tabs.discard` on tabs that hadn't loaded yet,
 which left them untitled and blank.)
