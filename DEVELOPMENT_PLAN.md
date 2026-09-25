@@ -14,7 +14,7 @@ Each slice ends with:
 
 ---
 
-## Track D — Bug fixes from tester feedback (in progress)
+## Track D — Bug fixes from tester feedback (done)
 
 Ordered by impact: D1 is broken for real users on Linux; the rest are
 polish/annoyances.
@@ -56,7 +56,7 @@ turns solid red, strip highlights. Clicking the icon still deletes.
 strip and confirm each deletes and the icon reacts while hovering.
 **Commit:** `fix: make the whole left strip a delete target when sorting tabs`
 
-### 🔲 Slice D4 — Hover peek as a floating panel
+### ✅ Slice D4 — Hover peek as a floating panel
 **Problem:** the peek list renders below the card, pushes content around
 and can run off the page.
 **Build:** render it as a fixed-position floating panel in a portal, on top

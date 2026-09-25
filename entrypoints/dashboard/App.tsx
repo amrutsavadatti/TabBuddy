@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import dashboardIcon from '@/assets/dashboard-header-icon.png';
 import { TriageView } from './TriageView';
 import {
@@ -75,6 +75,8 @@ import {
 } from '@/lib/nudgeSettings';
 import { NudgeSettingsDialog } from './NudgeSettingsDialog';
 import { SettingsBar } from './SettingsBar';
+import { HoverPeek } from './HoverPeek';
+import type { Box } from '@/lib/peekPosition';
 import { CategoryChips, CategoryPicker } from './CategoryPicker';
 import { BulkCategoryDialog, CATEGORY_DROP_PREFIX, CategoryDropStrip } from './CategoryTools';
 import { CategoriesView, UNCATEGORIZED_COLOR, UNCATEGORIZED_ID } from './CategoriesView';
@@ -377,13 +379,75 @@ function SnapshotCard({
   const isArchived = isArchivedSnapshot(snapshot);
   const accent = isArchived ? ARCHIVED_ACCENT_COLOR : getAccentColor(snapshot.name);
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [peekAnchor, setPeekAnchor] = useState<Box | null>(null);
+  const hoverCallbacks = useRef({ onHoverStart, onHoverEnd });
+  hoverCallbacks.current = { onHoverStart, onHoverEnd };
+
+  // Native listeners, not React's onMouseEnter/Leave: React treats a dialog
+  // rendered in a portal (e.g. "Show tabs") as still inside the card, so its
+  // mouseleave never fires and the preview would stay stuck over the dialog.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || !hoverPeek) return;
+    const show = () => {
+      setPeekAnchor(el.getBoundingClientRect());
+      hoverCallbacks.current.onHoverStart?.();
+    };
+    const hide = () => {
+      setPeekAnchor(null);
+      hoverCallbacks.current.onHoverEnd?.();
+    };
+    el.addEventListener('mouseenter', show);
+    el.addEventListener('mouseleave', hide);
+    return () => {
+      el.removeEventListener('mouseenter', show);
+      el.removeEventListener('mouseleave', hide);
+      hide();
+    };
+  }, [hoverPeek]);
+
+  // While the preview is open: follow the card on scroll/resize, and close it
+  // the moment the pointer is outside the card or anything is clicked, in case
+  // a leave event was missed (this is what used to leave it stuck behind).
+  const peekOpen = peekAnchor !== null;
+  useEffect(() => {
+    if (!peekOpen) return;
+    const close = () => {
+      setPeekAnchor(null);
+      hoverCallbacks.current.onHoverEnd?.();
+    };
+    const follow = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      setPeekAnchor((current) => (current && rect ? rect : current));
+    };
+    const onMove = (e: PointerEvent) => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+        close();
+      }
+    };
+    window.addEventListener('scroll', follow, true);
+    window.addEventListener('resize', follow);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerdown', close, true);
+    window.addEventListener('blur', close);
+    return () => {
+      window.removeEventListener('scroll', follow, true);
+      window.removeEventListener('resize', follow);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerdown', close, true);
+      window.removeEventListener('blur', close);
+    };
+  }, [peekOpen]);
+
   return (
     <div
+      ref={rootRef}
       className={`group relative transition-[filter,transform] duration-200 ${
         isBlurred ? 'z-0 scale-[0.99] blur-sm' : 'z-30'
       }`}
-      onMouseEnter={hoverPeek ? onHoverStart : undefined}
-      onMouseLeave={hoverPeek ? onHoverEnd : undefined}
     >
     <div
       className="flex flex-col gap-3 overflow-hidden rounded-xl border-t-4 border-border bg-card p-4 text-card-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
@@ -625,30 +689,7 @@ function SnapshotCard({
       </div>
 
     </div>
-    {hoverPeek && (
-      <div className="pointer-events-none absolute inset-x-0 top-full z-20 mt-2 hidden max-h-64 overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-lg group-hover:block">
-        <p className="mb-2 text-xs font-medium text-muted-foreground">
-          {snapshot.tabs.length} tabs
-        </p>
-        <ul className="flex flex-col gap-1.5">
-          {snapshot.tabs.slice(0, 8).map((tab, index) => (
-            <li key={index} className="flex items-center gap-2 text-xs">
-              {tab.favIconUrl ? (
-                <img src={tab.favIconUrl} alt="" className="h-4 w-4 shrink-0 rounded-sm" />
-              ) : (
-                <div className="h-4 w-4 shrink-0 rounded-sm bg-muted" />
-              )}
-              <span className="truncate">{tab.title || tab.url}</span>
-            </li>
-          ))}
-          {snapshot.tabs.length > 8 && (
-            <li className="text-xs text-muted-foreground">
-              +{snapshot.tabs.length - 8} more
-            </li>
-          )}
-        </ul>
-      </div>
-    )}
+    {hoverPeek && peekAnchor && <HoverPeek anchor={peekAnchor} snapshot={snapshot} />}
     </div>
   );
 }
