@@ -41,7 +41,7 @@ several intervals and confirm no second popup appears; dismiss it and
 confirm the next tick shows a different tab.
 **Commit:** `fix: never open a second nudge while one is open`
 
-### 🔲 Slice E2 — No nudges while the user is away
+### ✅ Slice E2 — No nudges while the user is away
 **Build:** Use Chrome's idle detection (adds the `idle` permission, which
 has no install warning). Nothing is shown while the device is idle or
 locked. When the user returns, wait one full interval before the first

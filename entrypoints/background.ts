@@ -11,6 +11,7 @@ import {
   NUDGE_INTERVAL_KEY,
 } from '@/lib/nudgeSettings';
 import { ensureNudgeAlarm, NUDGE_ALARM_NAME } from '@/lib/nudgeAlarm';
+import { AWAY_AFTER_SECONDS, checkNudgeGate, noteReturnedFromAway } from '@/lib/nudgeGate';
 import { closeNudgesFor, openNextNudge } from '@/lib/nudgeWindow';
 
 export default defineBackground(() => {
@@ -36,8 +37,24 @@ export default defineBackground(() => {
     closeNudgesFor(tabId);
   });
 
+  // When the user comes back from being away (idle or locked), stay quiet for
+  // one full interval so opening the laptop doesn't trigger an instant popup.
+  browser.idle.setDetectionInterval(AWAY_AFTER_SECONDS);
+  browser.idle.onStateChanged.addListener(async (state) => {
+    if (state === 'active') {
+      noteReturnedFromAway((await getNudgeIntervalMinutes()) * 60_000);
+    }
+  });
+
+  // `inactivityThresholdMs` is only passed by the manual dev trigger; that
+  // path skips the away/quiet gate so it can be tested on demand.
   const scanAndMaybeNudge = async (inactivityThresholdMs?: number) => {
     if (!(await getNudgeEnabled())) return;
+    if (inactivityThresholdMs === undefined) {
+      const intervalMs = (await getNudgeIntervalMinutes()) * 60_000;
+      const idleState = await browser.idle.queryState(AWAY_AFTER_SECONDS);
+      if (!(await checkNudgeGate(idleState, intervalMs))) return;
+    }
     const threshold = inactivityThresholdMs ?? (await getNudgeStaleMinutes()) * 60_000;
     const candidates = await runNudgeScan(threshold);
     // Least recently asked first, so a dismissed tab goes to the back of the

@@ -279,6 +279,11 @@ closes on its own. Nudges then come at most one per check, so several
 stale tabs are asked about one at a time. A tab you dismissed goes to the
 back of the line rather than coming straight back.
 
+Nudges also wait for you. Nothing pops up while you're away (no keyboard
+or mouse for about five minutes, or the screen is locked), and after you
+come back, or wake the computer, TabBuddy stays quiet for one full check
+interval before the first nudge.
+
 Open the gear's settings bar and click **Nudges** to open the nudge
 settings. There are two tabs, each taking a number plus a unit (minutes,
 hours, or days):
