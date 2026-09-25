@@ -46,7 +46,7 @@ save a window from the popup, confirm the card appears; change a setting in
 a second dashboard tab and confirm it follows.
 **Commit:** `fix: refresh the dashboard when stored data changes`
 
-### 🔲 Slice D3 — Whole left strip deletes in "Sort tabs one by one"
+### ✅ Slice D3 — Whole left strip deletes in "Sort tabs one by one"
 **Problem:** only the small red icon is a drop target, so dropping a card
 anywhere else in the left strip does nothing.
 **Build:** the entire left strip is the drop target. The red icon (and the

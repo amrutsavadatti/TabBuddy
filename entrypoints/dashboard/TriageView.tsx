@@ -79,21 +79,29 @@ function DropTile({
   );
 }
 
-function DeleteDropZone({ onClick }: { onClick: () => void }) {
+/** The whole left strip is the drop target, so a card dropped anywhere in it
+ * is closed; the trash icon just reacts (and still works as a plain button). */
+function DeleteStrip({ onClick }: { onClick: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'delete' });
   return (
-    <button
+    <div
       ref={setNodeRef}
-      onClick={onClick}
-      title="Close this tab"
-      className={`flex h-16 w-16 items-center justify-center rounded-full text-destructive shadow-sm transition-all duration-150 ${
-        isOver
-          ? 'scale-125 bg-destructive text-destructive-foreground shadow-xl ring-2 ring-destructive'
-          : 'scale-100 bg-destructive/10 hover:bg-destructive/20'
+      className={`relative z-20 flex w-[10%] min-w-[80px] items-center justify-center border-r transition-colors duration-150 ${
+        isOver ? 'border-destructive bg-destructive/15' : 'border-border bg-muted/30'
       }`}
     >
-      <Trash2 size={24} />
-    </button>
+      <button
+        onClick={onClick}
+        title="Close this tab"
+        className={`flex h-16 w-16 items-center justify-center rounded-full text-destructive shadow-sm transition-all duration-150 ${
+          isOver
+            ? 'scale-125 bg-destructive text-destructive-foreground shadow-xl ring-2 ring-destructive'
+            : 'scale-100 bg-destructive/10 hover:bg-destructive/20'
+        }`}
+      >
+        <Trash2 size={24} />
+      </button>
+    </div>
   );
 }
 
@@ -335,9 +343,7 @@ export function TriageView({
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          <div className="relative z-20 flex w-[10%] min-w-[80px] items-center justify-center border-r border-border bg-muted/30">
-            <DeleteDropZone onClick={handleDelete} />
-          </div>
+          <DeleteStrip onClick={handleDelete} />
 
           <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
