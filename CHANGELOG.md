@@ -2,6 +2,31 @@
 
 All notable changes to TabBuddy are listed here, newest first.
 
+## 1.0.4
+
+### Added
+- **Most used snapshots in the popup.** Below Save/Update, the toolbar popup
+  now shows your top 3 most-opened snapshots, each one click away — useful
+  even when you have nothing to save right now.
+- **Toast acknowledgements.** Deleting a snapshot or selection, removing a
+  tab, deleting a category, exporting, and importing now show a small
+  confirmation instead of happening silently.
+- **A "Playing now" step in the onboarding tour** (it was missing after the
+  feature shipped in 1.0.3).
+
+### Changed
+- **Sort tabs one by one** is easier to understand: a heading and a short
+  explainer of what the screen is for, a green **Finish** button that ends
+  the session and leaves whatever you haven't sorted untouched, and renaming
+  the snapshot you're building as you go.
+
+### Fixed
+- **A real bug:** filing a tab into a snapshot (in Sort tabs one by one)
+  saved a copy of it but never closed the actual tab. It now closes the tab,
+  and undo reopens it.
+- **Creating a category** from the tag picker or bulk "Add to category"
+  could show it twice in the list, though only one copy was ever saved.
+
 ## 1.0.3
 
 ### Added
