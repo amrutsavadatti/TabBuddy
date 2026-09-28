@@ -60,6 +60,74 @@ jump and mute work from the dashboard.
 
 ---
 
+## Track H — Tester feedback round 2 (in progress)
+
+From a friend's test pass. The keyboard shortcut collision (Ctrl+Shift+K
+opening a terminal on some Ubuntu/GNOME setups) is deliberately on hold.
+
+### ✅ Slice H1 — Sort tabs one by one: make it understandable
+**Build:**
+- A heading ("Your snapshots") above the right-hand tile column, which
+  currently has no label.
+- A short explanation centred at the top of the screen — what this feature is
+  for and why it's useful (e.g. "Go through your tabs one at a time: close the
+  ones you don't need, or file the rest into a snapshot") — plus the existing
+  drag-direction hint.
+- A rename control on the in-progress "New snapshot" tile once it has a name.
+- A way to finish the current session snapshot and start a second new one
+  without leaving the screen.
+- A **Finish** button that ends the session at any point, leaving every
+  remaining tab exactly where it is in the live window (untouched) — so the
+  user can sort just the first few tabs they care about, save/close those, and
+  leave the rest for later, instead of having to work through every tab or
+  abandon the window entirely. Today the only way out mid-way is closing the
+  triage window itself, which is not obviously safe to the user.
+**Test:** Manual: open Sort tabs cold and confirm the heading/explanation make
+the screen self-explanatory; rename the in-progress snapshot mid-session;
+start a second new snapshot in the same session; click Finish partway through
+and confirm the untouched tabs are still open and untouched in the window.
+**Commit:** `feat: add labels, an explainer, rename, a second snapshot, and Finish to Sort tabs`
+
+### 🔲 Slice H2 — Acknowledge actions
+**Build:** A small toast/snackbar system, used for destructive or easy-to-miss
+actions: snapshot deleted, tab removed, category deleted, export downloaded,
+import finished (with a count), archive completed. Not used for routine clicks
+like Open or Pin.
+**Test:** Unit tests for the toast queue (add, auto-dismiss, stacking). Manual:
+trigger each acknowledged action and confirm a toast appears and clears.
+**Commit:** `feat: acknowledge destructive and easy-to-miss actions with toasts`
+
+### 🔲 Slice H3 — Onboarding: add the "Playing now" step
+**Build:** A tutorial step for the playing-sound feature (popup list, dashboard
+pill, toolbar badge), matching the style of the other recent steps. It was
+built after the tutorial was last updated and got missed.
+**Test:** Manual: step through onboarding and confirm the new step appears in
+a sensible place (near Quick links, since both are "things TabBuddy notices").
+**Commit:** `docs: add the Playing now step to onboarding`
+
+### 🔲 Slice H4 — Popup: most-used snapshots
+**Build:** A short list in the toolbar popup of the user's 2–3 most-opened (or
+most-recently-used) snapshots, each with a one-click Open, so the popup is
+useful even when there's nothing to save or update right now. Reuses the
+existing most-frequently-used sort logic.
+**Test:** Unit tests for picking the top snapshots (ties, fewer than 3
+snapshots, none yet). Manual: open several snapshots different numbers of
+times and confirm the popup list reflects it; click Open from the popup.
+**Commit:** `feat: show most-used snapshots in the popup`
+
+### 🔲 Slice H5 — Website: per-browser install instructions
+**Build:** Separate, explicit install steps per browser on the website
+(Chrome/Brave/Edge today; Firefox added once/if a real Firefox test pass
+confirms it works — see the note below). Mirrors the README's steps.
+**Test:** Manual: read through each browser's steps as if new to the project.
+**Commit:** `docs: add per-browser install instructions to the website`
+
+*(Held, not scheduled): the Ctrl+Shift+K collision on Ubuntu/GNOME — a
+Linux-specific default shortcut and a one-click link to
+chrome://extensions/shortcuts from inside TabBuddy.)*
+
+---
+
 ## Track F — Quick links (done)
 
 **Idea:** a row of six circular site icons, centred above the Pinned section
