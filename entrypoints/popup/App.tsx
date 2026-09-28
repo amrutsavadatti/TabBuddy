@@ -10,6 +10,7 @@ import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
 import { LayoutGrid, Shuffle } from 'lucide-react';
+import { PlayingNow, usePlayingTabs } from '@/components/PlayingNow';
 
 function App() {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -17,6 +18,7 @@ function App() {
   const [linkedSnapshot, setLinkedSnapshot] = useState<Snapshot | null>(null);
   const [nameInput, setNameInput] = useState(() => generateSnapshotName());
   const [groupStatus, setGroupStatus] = useState<'idle' | 'grouping' | 'done'>('idle');
+  const playing = usePlayingTabs();
 
   useEffect(() => {
     (async () => {
@@ -69,6 +71,8 @@ function App() {
   return (
     <div className="flex w-72 flex-col gap-3 p-4">
       <h1 className="text-base font-semibold">TabBuddy</h1>
+
+      <PlayingNow tabs={playing.tabs} onChanged={playing.refresh} onJumped={() => window.close()} />
 
       {linkedSnapshot && (
         <div

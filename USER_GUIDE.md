@@ -16,6 +16,8 @@ extension day-to-day. (Looking to build or contribute instead? See
 - [Editing a snapshot](#editing-a-snapshot)
 - [Pinning and reordering](#pinning-and-reordering)
 - [Search and sort](#search-and-sort)
+- [Finding the tab that's playing sound](#finding-the-tab-thats-playing-sound)
+- [Quick links](#quick-links)
 - [Categories](#categories)
 - [Selecting multiple snapshots](#selecting-multiple-snapshots)
 - [Exporting and sharing](#exporting-and-sharing)
@@ -94,7 +96,8 @@ Things to know:
 - `chrome://` and `file://` tabs can't be opened by a placeholder, so they
   always load normally.
 - Prefer everything loaded up front? Turn off **Lazy loading** in the
-  settings bar (click the gear at the top right of the dashboard). It only
+  settings bar (click the gear at the top right of the dashboard, then the
+  **Dashboard** icon). It only
   affects snapshots you open afterward.
 
 ## Native Chrome tab groups
@@ -128,6 +131,10 @@ Either way, this re-captures the window's current tabs and groups and
 overwrites the saved snapshot.
 
 ## The dashboard
+
+The gear at the top right opens the **settings bar**: a row of icons for
+Dashboard, Automation, Quick links, Your data and Help. Click an icon to see
+the settings inside it, and click it again (or another icon) to close or switch.
 
 Open the dashboard by clicking **Open dashboard** in the popup, or with
 the [keyboard shortcut](#keyboard-shortcut). It shows every saved
@@ -182,6 +189,64 @@ Above the snapshot grid:
 (Pinned snapshots always keep their manually-set position regardless of
 the sort option — that's the point of pinning.)
 
+## Finding the tab that's playing sound
+
+Can't tell which tab is playing music, a video or a call? Click the
+TabBuddy icon. When any tab is making sound, a **Playing now** section
+appears at the top of the popup, listing each one with its icon and title.
+Click a row to jump straight to that tab (in whatever window it lives in), or
+click the speaker to mute or unmute it.
+
+The dashboard has the same thing: a green **playing** pill appears in its
+header while any tab is making sound. Click it for the list, then jump to a
+tab or mute it. It disappears when the sound stops.
+
+TabBuddy only knows about tabs that have made sound in the last couple of
+seconds. While any tab is making sound, the TabBuddy icon in the toolbar also
+shows a small green badge with how many, and hovering the icon says so, so you
+can tell at a glance without opening anything. It clears when the sound stops.
+
+A paused video, or a call where nobody is talking at that moment,
+won't be listed, and neither will a call that only uses the camera or
+microphone.
+
+## Quick links
+
+At the top of the dashboard is a row of six circles:
+
+- **The first three** are your most visited sites, found automatically. They
+  start empty and fill in as you browse. "Most visited" favours what you
+  use lately, so a site you stop using slowly fades out.
+- **The last three** are yours. Click a **+** to add a site: type its
+  address, or tap one of your most visited sites. A full address like
+  `https://mail.google.com/mail/u/1/` opens that exact page.
+
+Click a circle to jump to a tab you already have open on that site, or to
+open it in a new tab if there isn't one. Hover a circle for a small button:
+on the automatic ones it **hides that site** (handy for a search engine),
+and on yours it lets you **change or remove** it. A site you chose never
+appears twice.
+
+**What TabBuddy keeps, and where**
+
+- For each site you visit: its domain (like `github.com`), a score, when
+  you last visited, and its icon. Never the page address, title or content.
+- For the sites you add yourself: the exact address you typed.
+- All of it stays on your device, and nothing is sent anywhere.
+- Incognito windows, browser pages and TabBuddy's own pages are never counted.
+- Snapshot exports do not include any of this.
+
+Open the settings bar (the gear), then the **Quick links** icon, to manage them:
+
+- **Hidden sites** (shown once you've hidden something) lists every site you
+  hid, each with an **Unhide** button. Its visit score was kept, so it
+  can come straight back.
+- **Quick links** turns the feature off, which stops counting and hides the
+  row. What was already collected is kept.
+- **Clear visit history** makes TabBuddy forget everything it learned about
+  your visits, including scores and hidden sites. Use Hidden sites instead
+  if you only want one site back.
+
 ## Categories
 
 Group related snapshots with categories — like "Job Hunt", "Research" or
@@ -235,7 +300,8 @@ TabBuddy can export snapshots as a `.json` file, three ways:
 - **Single snapshot:** click the download icon on any card.
 - **Multiple snapshots:** use [Select mode](#selecting-multiple-snapshots)
   and click "Export selected".
-- **Everything:** open the gear's settings bar and click **Export all**.
+- **Everything:** open the gear's settings bar, click the **Your data** icon, and choose
+  **Export all**.
 
 This is how you back up your snapshots, move them to another computer, or
 **share a specific saved window with a friend** — just send them the
@@ -243,7 +309,8 @@ downloaded file.
 
 ## Importing
 
-Open the gear's settings bar, click **Import**, and choose a `.json` file
+Open the gear's settings bar, click the **Your data** icon, click **Import**,
+and choose a `.json` file
 (one you exported yourself, or one someone shared with you). TabBuddy
 adds each snapshot in the file as new entries — it never overwrites or
 merges with existing snapshots. Personal stats like usage count, pin
@@ -253,7 +320,8 @@ saved snapshot.
 
 ## Hover to peek
 
-Toggle **Hover peek** in the dashboard's settings bar (on by default) to preview
+Toggle **Hover peek** in the dashboard's settings bar (gear, then the **Dashboard**
+icon; on by default) to preview
 a snapshot's tabs just by hovering over its card — no need to click
 "Show tabs". While hovering, everything else on the page softly blurs out
 to keep your focus on the card you're peeking at. This turns off
@@ -286,7 +354,7 @@ or mouse for about five minutes, or the screen is locked), and after you
 come back, or wake the computer, TabBuddy stays quiet for one full check
 interval before the first nudge.
 
-Open the gear's settings bar and click **Nudges** to open the nudge
+Open the gear's settings bar, click the **Automation** icon, then **Nudges** to open the nudge
 settings. There are two tabs, each taking a number plus a unit (minutes,
 hours, or days):
 

@@ -31,6 +31,19 @@ describe('interpretStorageChange', () => {
     expect(interpretStorageChange({ categories: { newValue: cats } }, 'local')?.categories).toEqual(cats);
   });
 
+  it('returns the new visit stats, or an empty set when they were cleared', () => {
+    const stats = { 'a.com': { score: 1, lastVisitAt: 1, hidden: false } };
+    expect(interpretStorageChange({ siteStats: { newValue: stats } }, 'local')?.siteStats).toEqual(stats);
+    expect(interpretStorageChange({ siteStats: {} }, 'local')?.siteStats).toEqual({});
+  });
+
+  it('returns the new quick link slots, padded to three', () => {
+    const slots = [{ url: 'https://a.com/', domain: 'a.com' }];
+    expect(
+      interpretStorageChange({ quickLinkSlots: { newValue: slots } }, 'local')?.quickLinkSlots,
+    ).toEqual([{ url: 'https://a.com/', domain: 'a.com' }, null, null]);
+  });
+
   it('flags every dashboard setting', () => {
     for (const key of [
       'hoverPeekEnabled',
@@ -38,6 +51,7 @@ describe('interpretStorageChange', () => {
       'nudgeEnabled',
       'nudgeIntervalMinutes',
       'nudgeStaleMinutes',
+      'quickLinksEnabled',
     ]) {
       expect(interpretStorageChange({ [key]: { newValue: 1 } }, 'local')?.settings).toBe(true);
     }

@@ -27,6 +27,9 @@ and get them back with one click.
   everything as a JSON file — or share one with a friend.
 - **Hover to peek.** Hover a snapshot to preview its tabs (with a focus
   blur on everything else) without opening it.
+- **Quick links.** A row of circles at the top of the dashboard: your
+  three most visited sites (counted on your device, by domain only) and
+  three you choose. One click jumps to an open tab or opens the site.
 - **Categories.** Tag snapshots with any number of categories, then switch
   the dashboard to **Categories** view to see each category as a stack of
   cards. Click a stack to open it, drag cards onto other categories, or

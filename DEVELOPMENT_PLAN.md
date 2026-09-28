@@ -14,6 +14,112 @@ Each slice ends with:
 
 ---
 
+## Track G — Settings groups and "now playing" (done)
+
+**Problem 1:** the settings bar has grown to nine chips in one wrapping row
+and is hard to scan. **Problem 2:** it is hard to find which tab is playing
+music, a video or a call. Chrome reports whether a tab has made sound in the
+last couple of seconds (even if muted), but not which tabs use the camera or
+microphone, so a silent call or a paused video will not be detected.
+
+### ✅ Slice G1 — Group the settings bar
+**Build:** Give the bar small headings in a responsive grid (two columns,
+three on wide screens, stacked on narrow ones): Dashboard (Hover peek, Lazy
+loading), Automation (Nudges), Quick links (switch, Hidden sites, Clear visit
+history), Your data (Export all, Import), Help (Tutorial). Chip styling is
+unchanged.
+**Test:** Manual: open the gear at wide, medium and narrow widths and confirm
+the groups reflow and every control still works.
+**Commit:** `style: group the settings bar into labelled sections`
+
+### ✅ Slice G2 — "Playing now" in the toolbar popup
+**Build:** `lib/audibleTabs.ts` lists tabs that are making sound (including
+muted ones). The popup gets a "Playing now" section at the top, only when
+something is playing: site icon, title, click to jump to that tab and
+window, and a mute/unmute button. It updates live while the popup is open.
+**Test:** Unit tests for the audible-tab selection (ordering, lazy
+placeholders, incognito, missing ids) and the jump/mute actions. Manual: play
+a video, open the popup, jump and mute.
+**Commit:** `feat: show tabs playing sound in the popup`
+
+### ✅ Slice G3 — Toolbar icon badge
+**Build:** While any tab is making sound, the extension icon shows a small
+badge (a count) so it is visible without opening anything; it clears when the
+sound stops. Kept in step by the background script.
+**Test:** Unit tests for the badge text (none, one, several). Manual: start
+and stop audio and watch the icon.
+**Commit:** `feat: badge the toolbar icon while a tab is playing sound`
+
+### ✅ Slice G4 — "Playing now" on the dashboard
+**Build:** A compact "Playing now" pill in the dashboard header, shown only
+when a tab is making sound, opening a small list with the same jump and mute
+actions as the popup. It reuses the popup's list component and updates live.
+**Test:** Manual: play audio in two tabs, confirm both are listed and that
+jump and mute work from the dashboard.
+**Commit:** `feat: add a playing-now list to the dashboard`
+
+---
+
+## Track F — Quick links (done)
+
+**Idea:** a row of six circular site icons, centred above the Pinned section
+of the dashboard. The first three are the user's most visited sites (found
+automatically); the last three are sites the user picks. Clicking one jumps
+to an open tab on that site, or opens a new one.
+
+**Decisions:** visits are counted by TabBuddy itself (no `history`
+permission), by **domain**, and start from zero at install. Only the domain,
+a score, a last-visited time and the favicon are stored, on the device. A
+"visit" means the user is looking at the site (a tab becoming active, or a
+page finishing loading in the active tab), so pages loaded in the background
+(e.g. restoring a snapshot) do not count. "Most visited" favours recent
+habits (scores decay with a ~2 week half-life) over lifetime totals.
+Incognito, browser pages and TabBuddy's own pages are never counted. No
+network is used for icons: favicons come from pages the user has visited,
+with a lettered circle as the fallback.
+
+### ✅ Slice F1 — Visit counting
+**Build:** `lib/siteStats.ts` — per-domain stats in `storage.local` (score,
+last visited, favicon, hidden flag). Count a visit when a tab becomes active
+or finishes loading while active, ignoring the same domain again within 30
+minutes. Decayed scoring (~2 week half-life), a cap on how many domains are
+kept, and a hide/unhide flag. Background listeners feed it. No UI yet.
+**Test:** Unit tests for counting, the 30-minute repeat window, decay and
+ranking, ignoring non-web/incognito/own pages, the cap, and hiding.
+**Commit:** `feat: count visits per domain for quick links`
+
+### ✅ Slice F2 — Quick links row with the automatic sites
+**Build:** A centred row of circular icons above the Pinned section, showing
+the top three most-visited (non-hidden) domains: favicon in a circle with a
+soft accent ring, the site name underneath, gentle hover lift. Three empty
+placeholder circles until enough visits exist. Clicking focuses an open tab
+on that domain or opens a new one. The row updates live as the stats change.
+**Test:** Unit tests for picking the top sites and the focus-or-open choice.
+Manual: browse a few sites, open the dashboard, confirm the row and clicks.
+**Commit:** `feat: show most visited sites as quick links on the dashboard`
+
+### ✅ Slice F3 — Three sites you choose
+**Build:** Three more circles to the right, filled by the user: an empty slot
+shows "+", which opens a small dialog to enter a site or pick from recent
+ones; filled slots can be changed or removed. An automatic site that is also
+chosen is skipped so it never appears twice. Circles fall back to a lettered
+avatar until a favicon has been seen.
+**Test:** Unit tests for the slot storage, normalising an entered address,
+and de-duplication against the automatic sites. Manual: add, change and
+remove sites and reload.
+**Commit:** `feat: let users choose three quick link sites`
+
+### ✅ Slice F4 — Controls, privacy and docs
+**Build:** "Hide this site" on an automatic tile, a "clear visit history"
+button, and a Quick links on/off switch in the settings bar (off stops
+counting and hides the row). README, USER_GUIDE, and an onboarding step,
+including a plain statement of what is stored.
+**Test:** Unit tests for clearing and for counting stopping when disabled.
+Manual: hide a site, clear history, toggle off and on.
+**Commit:** `feat: add quick link privacy controls and document quick links`
+
+---
+
 ## Track E — Less annoying nudges (done)
 
 **Problem:** the nudge feature can pile up. The "only one popup at a time"

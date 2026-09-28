@@ -34,6 +34,7 @@ import {
   LayoutGrid,
   Layers,
   Leaf,
+  Link2,
   Lock,
   MousePointerClick,
   Palette,
@@ -76,6 +77,26 @@ import {
 import { NudgeSettingsDialog } from './NudgeSettingsDialog';
 import { SettingsBar } from './SettingsBar';
 import { HoverPeek } from './HoverPeek';
+import { QuickLinks } from './QuickLinks';
+import { PlayingPill } from './PlayingPill';
+import { focusOrOpenSite } from '@/lib/quickLinks';
+import {
+  clearSiteStats,
+  getHiddenSites,
+  getSiteStats,
+  getTopSites,
+  setSiteHidden,
+  type SiteStats,
+} from '@/lib/siteStats';
+import { getQuickLinksEnabled, setQuickLinksEnabled } from '@/lib/quickLinksSetting';
+import {
+  chosenDomains,
+  getQuickLinkSlots,
+  isDomainInOtherSlot,
+  normalizeSiteInput,
+  setQuickLinkSlot,
+  type QuickLinkSlots,
+} from '@/lib/quickLinkSlots';
 import type { Box } from '@/lib/peekPosition';
 import { CategoryChips, CategoryPicker } from './CategoryPicker';
 import { BulkCategoryDialog, CATEGORY_DROP_PREFIX, CategoryDropStrip } from './CategoryTools';
@@ -200,17 +221,24 @@ const ONBOARDING_STEPS: {
     accent: VIBES[0]!.swatch,
   },
   {
+    icon: Link2,
+    title: 'Quick links',
+    description:
+      'A row of circles at the top of the dashboard: your three most visited sites, plus three you pick with the + button. Hover a circle to hide a site or change your own. Everything stays on your device, and you can turn it off in the settings bar (the gear, then Quick links).',
+    accent: VIBES[3]!.swatch,
+  },
+  {
     icon: Leaf,
     title: 'Lazy-loaded tabs',
     description:
-      'Opening a snapshot loads only the first tab. The rest wait as light placeholders (domain, page title, full URL) and load only when you click Load this page. Turn it off in the settings bar (the gear at the top right).',
+      'Opening a snapshot loads only the first tab. The rest wait as light placeholders (domain, page title, full URL) and load only when you click Load this page. Turn it off in the settings bar (the gear, then Dashboard).',
     accent: VIBES[2]!.swatch,
   },
   {
     icon: Bell,
     title: 'Tab hoarder nudges',
     description:
-      'TabBuddy checks on a schedule you pick for tabs you haven\'t touched in as long as you say, then nudges you to Close, Archive & Close, or Keep them. Tune both settings or turn it off from the settings bar (the gear at the top right).',
+      'TabBuddy checks on a schedule you pick for tabs you haven\'t touched in as long as you say, then nudges you to Close, Archive & Close, or Keep them. Tune both settings or turn it off from the settings bar (the gear, then Automation).',
     accent: VIBES[1]!.swatch,
   },
   {
@@ -755,6 +783,7 @@ function App() {
   const [sortBy, setSortBy] = useState<SortOption>('mfu');
   const [hoverPeekEnabled, setHoverPeekEnabledState] = useState(true);
   const [lazyRestoreEnabled, setLazyRestoreEnabledState] = useState(true);
+  const [quickLinksEnabled, setQuickLinksEnabledState] = useState(true);
   const [nudgeEnabled, setNudgeEnabledState] = useState(true);
   const [nudgeIntervalMinutes, setNudgeIntervalMinutesState] = useState(
     DEFAULT_NUDGE_INTERVAL_MINUTES,
@@ -764,6 +793,8 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [view, setView] = useState<DashboardView>('simple');
+  const [siteStats, setSiteStats] = useState<SiteStats>({});
+  const [quickSlots, setQuickSlots] = useState<QuickLinkSlots>([null, null, null]);
   const [openCategoryId, setOpenCategoryId] = useState<string | null>(null);
   const [drillDragId, setDrillDragId] = useState<string | null>(null);
   const [dropNotice, setDropNotice] = useState<string | null>(null);
@@ -786,8 +817,11 @@ function App() {
     });
     getHoverPeekEnabled().then(setHoverPeekEnabledState);
     getCategories().then(setCategories);
+    getSiteStats().then(setSiteStats);
+    getQuickLinkSlots().then(setQuickSlots);
     getDashboardView().then(setView);
     getLazyRestoreEnabled().then(setLazyRestoreEnabledState);
+    getQuickLinksEnabled().then(setQuickLinksEnabledState);
     getNudgeEnabled().then(setNudgeEnabledState);
     getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
     getNudgeStaleMinutes().then(setNudgeStaleMinutesState);
@@ -810,9 +844,12 @@ function App() {
       if (!change) return;
       if (change.snapshots) setSnapshots(change.snapshots);
       if (change.categories) setCategories(change.categories);
+      if (change.siteStats) setSiteStats(change.siteStats);
+      if (change.quickLinkSlots) setQuickSlots(change.quickLinkSlots);
       if (change.settings) {
         getHoverPeekEnabled().then(setHoverPeekEnabledState);
         getLazyRestoreEnabled().then(setLazyRestoreEnabledState);
+        getQuickLinksEnabled().then(setQuickLinksEnabledState);
         getNudgeEnabled().then(setNudgeEnabledState);
         getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
         getNudgeStaleMinutes().then(setNudgeStaleMinutesState);
@@ -842,6 +879,29 @@ function App() {
       setLazyRestoreEnabled(next);
       return next;
     });
+  };
+
+  const toggleQuickLinks = () => {
+    setQuickLinksEnabledState((prev) => {
+      const next = !prev;
+      setQuickLinksEnabled(next);
+      return next;
+    });
+  };
+
+  const handleHideSite = async (domain: string) => {
+    await setSiteHidden(domain, true);
+    setSiteStats(await getSiteStats());
+  };
+
+  const handleUnhideSite = async (domain: string) => {
+    await setSiteHidden(domain, false);
+    setSiteStats(await getSiteStats());
+  };
+
+  const handleClearVisitHistory = async () => {
+    await clearSiteStats();
+    setSiteStats({});
   };
 
   const changeNudgeEnabled = (enabled: boolean) => {
@@ -1158,6 +1218,31 @@ function App() {
     return [...pinnedFirst, ...rest];
   })();
 
+  // Quick links: the automatic sites skip anything the user already chose, so
+  // no site ever shows twice.
+  const chosen = chosenDomains(quickSlots);
+  const autoSites = getTopSites(siteStats, Date.now(), 3, chosen);
+  const quickSuggestions = getTopSites(siteStats, Date.now(), 6, chosen).map((s) => s.domain);
+  const slotIcons = Object.fromEntries(
+    quickSlots.flatMap((slot) => (slot ? [[slot.domain, siteStats[slot.domain]?.favIconUrl]] : [])),
+  );
+
+  const handleSaveQuickSlot = async (index: number, input: string): Promise<string | null> => {
+    const parsed = normalizeSiteInput(input);
+    if (!parsed) return 'Enter a website, like github.com';
+    if (isDomainInOtherSlot(quickSlots, index, parsed.domain)) {
+      return 'That site is already in your quick links.';
+    }
+    await setQuickLinkSlot(index, parsed);
+    setQuickSlots(await getQuickLinkSlots());
+    return null;
+  };
+
+  const handleClearQuickSlot = async (index: number) => {
+    await setQuickLinkSlot(index, null);
+    setQuickSlots(await getQuickLinkSlots());
+  };
+
   const chromeBlurClass = `transition-[filter] duration-200 ${hoveredId ? 'blur-sm' : ''}`;
 
   if (triageWindowId !== null) {
@@ -1229,6 +1314,8 @@ function App() {
             </Button>
           )}
 
+          <PlayingPill />
+
           <div className="flex items-center gap-1.5">
             {VIBES.map((v) => (
               <button
@@ -1266,6 +1353,11 @@ function App() {
         nudgeEnabled={nudgeEnabled}
         nudgeIntervalMinutes={nudgeIntervalMinutes}
         onOpenNudgeSettings={() => setNudgeDialogOpen(true)}
+        quickLinksEnabled={quickLinksEnabled}
+        onToggleQuickLinks={toggleQuickLinks}
+        onClearVisitHistory={handleClearVisitHistory}
+        hiddenSites={getHiddenSites(siteStats)}
+        onUnhideSite={handleUnhideSite}
         canExport={snapshots.length > 0}
         onExportAll={() => downloadSnapshotsAsFile(snapshots, categories)}
         onImportFile={handleImportFile}
@@ -1280,6 +1372,20 @@ function App() {
         staleMinutes={nudgeStaleMinutes}
         onSave={saveNudgeSettings}
       />
+
+      {!isDrilledIn && quickLinksEnabled && (
+        <QuickLinks
+          sites={autoSites}
+          slots={quickSlots}
+          slotIcons={slotIcons}
+          suggestions={quickSuggestions}
+          onOpen={focusOrOpenSite}
+          onSaveSlot={handleSaveQuickSlot}
+          onClearSlot={handleClearQuickSlot}
+          onHideSite={handleHideSite}
+          className={chromeBlurClass}
+        />
+      )}
 
       {snapshots.length > 0 && (
         <div className={`mb-6 flex flex-wrap items-center gap-3 ${chromeBlurClass}`}>

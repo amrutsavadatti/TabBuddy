@@ -2,6 +2,8 @@ import { openOrFocusDashboard } from '@/lib/dashboard';
 import { ensureArchivedSnapshotExists } from '@/lib/archive';
 import { unmanageTab } from '@/lib/managedTabs';
 import { clearAllWindowLinks, reconcileAfterReload } from '@/lib/reconcile';
+import { recordSiteVisit } from '@/lib/siteStats';
+import { updatePlayingBadge } from '@/lib/playingBadge';
 import { forgetAsked, getAskedMap, orderByLeastRecentlyAsked } from '@/lib/nudgeAsked';
 import { runNudgeScan } from '@/lib/nudgeRunner';
 import {
@@ -16,6 +18,7 @@ import { closeNudgesFor, openNextNudge } from '@/lib/nudgeWindow';
 
 export default defineBackground(() => {
   ensureArchivedSnapshotExists();
+  updatePlayingBadge().catch(() => {});
 
   // Browser launch resets window/tab ids; an extension reload/update keeps
   // them but empties the session registry.
@@ -29,12 +32,32 @@ export default defineBackground(() => {
   // Tabs closed (or opened by the user) while a nudge is asking about them:
   // close that nudge so it can never block the next one.
   browser.tabs.onRemoved.addListener((tabId) => {
+    updatePlayingBadge().catch(() => {});
     closeNudgesFor(tabId);
     unmanageTab(tabId);
     forgetAsked(tabId);
   });
-  browser.tabs.onActivated.addListener(({ tabId }) => {
+  browser.tabs.onActivated.addListener(async ({ tabId }) => {
     closeNudgesFor(tabId);
+    // Quick links: switching to a tab counts as a visit to its site.
+    try {
+      const tab = await browser.tabs.get(tabId);
+      if (!tab.incognito) recordSiteVisit(tab.url, tab.favIconUrl);
+    } catch {
+      // tab closed before we could look at it
+    }
+  });
+  // A page that finishes loading (or gets its icon) in the tab the user is
+  // looking at also counts. Background loads, like a restored snapshot, do not.
+  browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+    // Toolbar badge: tabs starting or stopping sound (or being muted).
+    if (changeInfo.audible !== undefined || changeInfo.mutedInfo !== undefined) {
+      updatePlayingBadge().catch(() => {});
+    }
+    if (!tab.active || tab.incognito) return;
+    if (changeInfo.status === 'complete' || changeInfo.favIconUrl) {
+      recordSiteVisit(tab.url, tab.favIconUrl);
+    }
   });
 
   // When the user comes back from being away (idle or locked), stay quiet for
