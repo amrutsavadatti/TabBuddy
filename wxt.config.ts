@@ -32,4 +32,10 @@ export default defineConfig({
   vite: () => ({
     plugins: [tailwindcss()],
   }),
+  zip: {
+    // Firefox review requires a sources ZIP; without this, WXT sweeps up the
+    // whole repo root, including the multi-GB Website/ folder (screen
+    // recordings etc.) that isn't part of the extension's source.
+    excludeSources: ['Website/**'],
+  },
 });
