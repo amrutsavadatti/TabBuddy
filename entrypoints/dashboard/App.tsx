@@ -77,6 +77,7 @@ import {
 import { NudgeSettingsDialog } from './NudgeSettingsDialog';
 import { SettingsBar } from './SettingsBar';
 import { HoverPeek } from './HoverPeek';
+import { useToast } from '@/components/Toaster';
 import { QuickLinks } from './QuickLinks';
 import { PlayingPill } from './PlayingPill';
 import { focusOrOpenSite } from '@/lib/quickLinks';
@@ -808,6 +809,7 @@ function App() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
+  const showToast = useToast();
 
   useEffect(() => {
     getSnapshots().then(setSnapshots);
@@ -946,6 +948,7 @@ function App() {
     if (isArchivedSnapshot(snapshot)) return;
     await deleteSnapshot(snapshot.id);
     setSnapshots((prev) => prev.filter((s) => s.id !== snapshot.id));
+    showToast(`"${snapshot.name}" deleted`);
   };
 
   const startRename = (snapshot: Snapshot) => {
@@ -967,6 +970,7 @@ function App() {
     const tabs = snapshot.tabs.filter((_, i) => i !== tabIndex);
     await updateSnapshot(snapshot.id, { tabs, updatedAt: Date.now() });
     patchSnapshot(snapshot.id, { tabs });
+    showToast('Tab removed');
   };
 
   const moveTab = async (snapshot: Snapshot, index: number, direction: -1 | 1) => {
@@ -1055,6 +1059,7 @@ function App() {
     const toExport = snapshots.filter((s) => selectedIds.has(s.id));
     if (toExport.length === 0) return;
     downloadSnapshotsAsFile(toExport, categories);
+    showToast(`Exported ${toExport.length} snapshot${toExport.length === 1 ? '' : 's'}`);
     toggleSelectionMode();
   };
 
@@ -1064,6 +1069,7 @@ function App() {
       .map((s) => s.id);
     await deleteSnapshots(idsToDelete);
     setSnapshots((prev) => prev.filter((s) => !idsToDelete.includes(s.id)));
+    showToast(`${idsToDelete.length} snapshot${idsToDelete.length === 1 ? '' : 's'} deleted`);
     toggleSelectionMode();
   };
 
@@ -1079,6 +1085,7 @@ function App() {
       await addSnapshots(imported);
       setCategories(await getCategories());
       getSnapshots().then(setSnapshots);
+      showToast(`Imported ${imported.length} snapshot${imported.length === 1 ? '' : 's'}`);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to import file.');
     }
@@ -1099,7 +1106,7 @@ function App() {
   const createCategoryFor = async (snapshot: Snapshot, name: string) => {
     try {
       const category = await addCategory(name);
-      setCategories((prev) => [...prev, category]);
+      setCategories(await getCategories());
       const next = [...snapshot.categoryIds, category.id];
       await setSnapshotCategories(snapshot.id, next);
       patchSnapshot(snapshot.id, { categoryIds: next });
@@ -1154,7 +1161,7 @@ function App() {
 
   const createCategoryForBulk = async (name: string) => {
     const category = await addCategory(name);
-    setCategories((prev) => [...prev, category]);
+    setCategories(await getCategories());
     return category;
   };
 
@@ -1168,10 +1175,11 @@ function App() {
     setCategories(await getCategories());
   };
 
-  const handleDeleteCategory = async (id: string) => {
+  const handleDeleteCategory = async (id: string, name: string) => {
     await deleteCategory(id);
     setCategories(await getCategories());
     setSnapshots(await getSnapshots());
+    showToast(`"${name}" category deleted`);
   };
 
   const cardProps = (snapshot: Snapshot) => ({
@@ -1185,7 +1193,10 @@ function App() {
     onUpdate: () => handleUpdate(snapshot),
     onDelete: () => handleDelete(snapshot),
     onTogglePin: () => togglePin(snapshot),
-    onExport: () => downloadSnapshotsAsFile([snapshot], categories),
+    onExport: () => {
+      downloadSnapshotsAsFile([snapshot], categories);
+      showToast('Exported');
+    },
     onRemoveTab: (index: number) => removeTab(snapshot, index),
     onMoveTab: (index: number, direction: -1 | 1) => moveTab(snapshot, index, direction),
     categories,
@@ -1359,7 +1370,10 @@ function App() {
         hiddenSites={getHiddenSites(siteStats)}
         onUnhideSite={handleUnhideSite}
         canExport={snapshots.length > 0}
-        onExportAll={() => downloadSnapshotsAsFile(snapshots, categories)}
+        onExportAll={() => {
+          downloadSnapshotsAsFile(snapshots, categories);
+          showToast(`Exported ${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'}`);
+        }}
         onImportFile={handleImportFile}
         onOpenTutorial={() => setOnboardingOpen(true)}
       />
@@ -1583,7 +1597,7 @@ function App() {
                 categories={categories}
                 onRename={handleRenameCategory}
                 onRecolor={handleRecolorCategory}
-                onDelete={handleDeleteCategory}
+                onDelete={(id) => handleDeleteCategory(id, categories.find((c) => c.id === id)?.name ?? 'Category')}
                 onOpen={setOpenCategoryId}
               />
             </section>

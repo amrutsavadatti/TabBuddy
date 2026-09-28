@@ -88,7 +88,7 @@ start a second new snapshot in the same session; click Finish partway through
 and confirm the untouched tabs are still open and untouched in the window.
 **Commit:** `feat: add labels, an explainer, rename, a second snapshot, and Finish to Sort tabs`
 
-### 🔲 Slice H2 — Acknowledge actions
+### ✅ Slice H2 — Acknowledge actions
 **Build:** A small toast/snackbar system, used for destructive or easy-to-miss
 actions: snapshot deleted, tab removed, category deleted, export downloaded,
 import finished (with a count), archive completed. Not used for routine clicks
