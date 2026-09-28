@@ -8,6 +8,7 @@ extension day-to-day. (Looking to build or contribute instead? See
 
 - [The basics: saving a window](#the-basics-saving-a-window)
 - [Naming your snapshots](#naming-your-snapshots)
+- [Most used snapshots in the popup](#most-used-snapshots-in-the-popup)
 - [Opening a saved snapshot](#opening-a-saved-snapshot)
 - [Lazy-loaded tabs](#lazy-loaded-tabs)
 - [Native Chrome tab groups](#native-chrome-tab-groups)
@@ -55,6 +56,15 @@ If you save two windows with the same name, TabBuddy automatically
 appends a number so they stay distinct — e.g. a second "Job Hunt" becomes
 "Job Hunt (2)". This also applies when importing a file whose snapshot
 names collide with ones you already have.
+
+## Most used snapshots in the popup
+
+Once you've opened a snapshot a few times, the toolbar popup shows a short
+**Most used** list below the Save/Update box — your top 3 by how often you
+open them, each with its tab count. Click one to open it straight away,
+without going to the dashboard. It's empty until you've opened at least one
+snapshot, and never shows the Archived snapshot or the one already linked to
+your current window (that one has its own Update button above).
 
 ## Opening a saved snapshot
 

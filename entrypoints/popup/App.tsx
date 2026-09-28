@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { createSnapshotFromCurrentWindow } from '@/lib/capture';
 import { addSnapshot, getSnapshots } from '@/lib/storage';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
+import { restoreSnapshot } from '@/lib/restore';
+import { getMostUsedSnapshots } from '@/lib/sort';
 import { generateSnapshotName, getUniqueName } from '@/lib/names';
 import { openOrFocusDashboard, openTriageSession } from '@/lib/dashboard';
 import { autoGroupByDomain } from '@/lib/autoGroup';
@@ -12,10 +14,13 @@ import { Button } from '@/components/ui/button';
 import { LayoutGrid, Shuffle } from 'lucide-react';
 import { PlayingNow, usePlayingTabs } from '@/components/PlayingNow';
 
+const MOST_USED_COUNT = 3;
+
 function App() {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'updating' | 'updated'>('idle');
   const [linkedSnapshot, setLinkedSnapshot] = useState<Snapshot | null>(null);
+  const [mostUsed, setMostUsed] = useState<Snapshot[]>([]);
   const [nameInput, setNameInput] = useState(() => generateSnapshotName());
   const [groupStatus, setGroupStatus] = useState<'idle' | 'grouping' | 'done'>('idle');
   const playing = usePlayingTabs();
@@ -26,11 +31,23 @@ function App() {
       const snapshots = await getSnapshots();
       const match = snapshots.find((s) => s.linkedWindowId === currentWindow.id);
       setLinkedSnapshot(match ?? null);
+      // Already shown above with its own Update button — no need to repeat it.
+      setMostUsed(
+        getMostUsedSnapshots(
+          snapshots.filter((s) => s.id !== match?.id),
+          MOST_USED_COUNT,
+        ),
+      );
     })();
     getStoredVibe().then((v) => {
       document.documentElement.dataset.vibe = v;
     });
   }, []);
+
+  const openMostUsed = async (snapshot: Snapshot) => {
+    await restoreSnapshot(snapshot);
+    window.close();
+  };
 
   const openDashboard = () => {
     openOrFocusDashboard();
@@ -101,6 +118,26 @@ function App() {
           <Button size="sm" onClick={saveWindow} disabled={status === 'saving'}>
             {status === 'saved' ? 'Saved!' : 'Save this window'}
           </Button>
+        </div>
+      )}
+
+      {mostUsed.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="px-1 text-xs font-medium text-muted-foreground">Most used</p>
+          {mostUsed.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => openMostUsed(s)}
+              title={`Open "${s.name}"`}
+              className="flex items-center gap-2 rounded-lg border-t-4 border-border bg-card px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted"
+              style={{ borderTopColor: getAccentColor(s.name) }}
+            >
+              <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {s.tabs.length} tab{s.tabs.length === 1 ? '' : 's'}
+              </span>
+            </button>
+          ))}
         </div>
       )}
 

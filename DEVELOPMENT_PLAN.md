@@ -97,7 +97,7 @@ like Open or Pin.
 trigger each acknowledged action and confirm a toast appears and clears.
 **Commit:** `feat: acknowledge destructive and easy-to-miss actions with toasts`
 
-### 🔲 Slice H3 — Onboarding: add the "Playing now" step
+### ✅ Slice H3 — Onboarding: add the "Playing now" step
 **Build:** A tutorial step for the playing-sound feature (popup list, dashboard
 pill, toolbar badge), matching the style of the other recent steps. It was
 built after the tutorial was last updated and got missed.
@@ -105,7 +105,7 @@ built after the tutorial was last updated and got missed.
 a sensible place (near Quick links, since both are "things TabBuddy notices").
 **Commit:** `docs: add the Playing now step to onboarding`
 
-### 🔲 Slice H4 — Popup: most-used snapshots
+### ✅ Slice H4 — Popup: most-used snapshots
 **Build:** A short list in the toolbar popup of the user's 2–3 most-opened (or
 most-recently-used) snapshots, each with a one-click Open, so the popup is
 useful even when there's nothing to save or update right now. Reuses the

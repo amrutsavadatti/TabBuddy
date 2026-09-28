@@ -35,6 +35,7 @@ import {
   Layers,
   Leaf,
   Link2,
+  Volume2,
   Lock,
   MousePointerClick,
   Palette,
@@ -220,6 +221,13 @@ const ONBOARDING_STEPS: {
     description:
       'Tag snapshots with the tag icon on a card, then switch to Categories view to see each category as a stack. Click a stack to open it, and drag cards between categories.',
     accent: VIBES[0]!.swatch,
+  },
+  {
+    icon: Volume2,
+    title: 'Playing now',
+    description:
+      'Can\'t tell which tab is making noise? A green "playing" pill in the header (and the same list in the toolbar popup) shows every tab currently playing sound, with a click to jump to it and a button to mute it. The toolbar icon also badges itself with how many are playing.',
+    accent: VIBES[2]!.swatch,
   },
   {
     icon: Link2,

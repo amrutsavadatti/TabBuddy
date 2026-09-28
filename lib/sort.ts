@@ -1,3 +1,4 @@
+import { isArchivedSnapshot } from './archive';
 import type { Snapshot } from './types';
 
 export type SortOption = 'mfu' | 'recentlyUpdated' | 'recentlyCreated';
@@ -32,4 +33,14 @@ export function getDisplayOrder(
   const unpinned = snapshots.filter((s) => !s.pinned).sort(SORTERS[sortBy]);
 
   return { pinned, unpinned };
+}
+
+/** The snapshots the user opens most, for a quick-access list (e.g. the
+ * toolbar popup). Archived and never-opened snapshots are left out, so the
+ * list is either genuinely useful or empty — never padded with filler. */
+export function getMostUsedSnapshots(snapshots: Snapshot[], count: number): Snapshot[] {
+  return snapshots
+    .filter((s) => !isArchivedSnapshot(s) && s.usageCount > 0)
+    .sort((a, b) => b.usageCount - a.usageCount || b.updatedAt - a.updatedAt)
+    .slice(0, count);
 }
