@@ -3,6 +3,7 @@ import type { Snapshot } from './types';
 import { getLazyRestoreEnabled } from './lazyRestore';
 import { buildLazyTabUrl, isHttpUrl } from './lazyTab';
 import { setManagedTabs } from './managedTabs';
+import { hasTabGroupsSupport } from './tabGroupsSupport';
 import { updateSnapshot } from './storage';
 
 async function focusExistingWindow(windowId: number): Promise<boolean> {
@@ -20,6 +21,8 @@ async function recreateTabGroups(
   snapshot: Snapshot,
   windowId: number,
 ): Promise<void> {
+  if (!hasTabGroupsSupport()) return;
+
   const tabIdsByGroupIndex = new Map<number, number[]>();
 
   createdTabIds.forEach((tabId, index) => {

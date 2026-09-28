@@ -7,6 +7,7 @@ import { getMostUsedSnapshots } from '@/lib/sort';
 import { generateSnapshotName, getUniqueName } from '@/lib/names';
 import { openOrFocusDashboard, openTriageSession } from '@/lib/dashboard';
 import { autoGroupByDomain } from '@/lib/autoGroup';
+import { hasTabGroupsSupport } from '@/lib/tabGroupsSupport';
 import { getStoredVibe } from '@/lib/vibes';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
@@ -147,10 +148,12 @@ function App() {
       <Button size="sm" variant="outline" onClick={sortTabs}>
         <Shuffle size={14} className="mr-1" /> Sort tabs
       </Button>
-      <Button size="sm" variant="outline" onClick={groupBySite} disabled={groupStatus === 'grouping'}>
-        <LayoutGrid size={14} className="mr-1" />
-        {groupStatus === 'done' ? 'Grouped!' : 'Group by site'}
-      </Button>
+      {hasTabGroupsSupport() && (
+        <Button size="sm" variant="outline" onClick={groupBySite} disabled={groupStatus === 'grouping'}>
+          <LayoutGrid size={14} className="mr-1" />
+          {groupStatus === 'done' ? 'Grouped!' : 'Group by site'}
+        </Button>
+      )}
     </div>
   );
 }

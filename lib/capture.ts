@@ -1,5 +1,6 @@
 import { resolveLazyTab } from './lazyTab';
 import { setManagedTabs } from './managedTabs';
+import { hasTabGroupsSupport } from './tabGroupsSupport';
 import type { Snapshot, SnapshotTab, SnapshotTabGroup } from './types';
 
 export async function captureWindowTabs(windowId: number): Promise<{
@@ -9,7 +10,7 @@ export async function captureWindowTabs(windowId: number): Promise<{
 }> {
   const [tabs, groups] = await Promise.all([
     browser.tabs.query({ windowId }),
-    browser.tabGroups.query({ windowId }),
+    hasTabGroupsSupport() ? browser.tabGroups.query({ windowId }) : Promise.resolve([]),
   ]);
 
   const groupIdToIndex = new Map<number, number>();

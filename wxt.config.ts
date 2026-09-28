@@ -4,10 +4,21 @@ import tailwindcss from '@tailwindcss/vite';
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
-  manifest: {
+  manifest: (env) => ({
     name: 'TabBuddy',
     description: 'Snapshot and restore browser window tab groups.',
-    permissions: ['tabs', 'tabGroups', 'windows', 'storage', 'sessions', 'alarms', 'idle'],
+    permissions: [
+      'tabs',
+      // Native tab-group capture/restore/auto-group is Chrome-only; the
+      // permission doesn't exist on other browsers, and the code already
+      // no-ops those features there (see lib/tabGroupsSupport.ts).
+      ...(env.browser === 'chrome' ? ['tabGroups' as const] : []),
+      'windows',
+      'storage',
+      'sessions',
+      'alarms',
+      'idle',
+    ],
     commands: {
       'open-dashboard': {
         suggested_key: {
@@ -17,7 +28,7 @@ export default defineConfig({
         description: 'Open TabBuddy dashboard',
       },
     },
-  },
+  }),
   vite: () => ({
     plugins: [tailwindcss()],
   }),
