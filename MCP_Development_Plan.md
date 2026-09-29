@@ -150,6 +150,8 @@ when to use a tool, not only what it does.
 | `list_open_windows` | none | Windows → tabs with id, title, url, lastAccessed, pinned, audible, linked snapshot name, `managed` | `tabs.query`, `getManagedTabIds` |
 | `get_stale_tabs` | `olderThanMinutes?` | Open tabs the nudge logic would flag, with how stale each one is | `findNudgeCandidates`, `scoreTabImportance` |
 | `get_usage_stats` | none | Top snapshots by usage, top sites (domains only) | `sort.ts`, `getTopSites` |
+| `summarize_window` | `windowId?` | A compact digest of one window: counts, idle buckets, biggest sites with tab ids, duplicates, tabs already saved elsewhere, tabs that may hold unsaved work | `shapeOpenWindows`, `pageKey` |
+| `find_duplicate_tabs` | `windowId?` | Groups of tabs on the same page, with the one to keep and the extras | `pageKey` |
 
 **Safe write tools** (these don't close or remove anything)
 
@@ -163,6 +165,7 @@ when to use a tool, not only what it does.
 | `update_snapshot_from_window` | `id` | Re-saves a snapshot from its open window | `updateSnapshotFromLiveWindow` |
 | `rename_snapshot` | `id`, `name` | Renames a snapshot (the Archived snapshot is protected) | `renameSnapshot` |
 | `tag_snapshots` | `snapshotIds[]`, `categoryNames[]` | Adds categories to snapshots, creating any that are missing | `addCategory`, `addSnapshotsToCategories` |
+| `add_tabs_to_snapshot` | `id`, `tabIds[]?`, `urls[]?` | Appends open tabs and/or links to an existing snapshot, skipping pages already in it; never closes a tab | `updateSnapshot`, `pageKey` |
 
 **Destructive tools** (always two steps)
 
@@ -333,7 +336,7 @@ just that slice.
 **Goal:** a single `list_snapshots` call from Claude Code returns real data.
 Every later track only adds handlers and tools.
 
-### 🔲 Slice P1 — Protocol and dispatcher
+### ✅ Slice P1 — Protocol and dispatcher
 **Build:**
 - `bridge/protocol.ts` with the request, response and error types, and the
   method names.
@@ -351,7 +354,7 @@ Every later track only adds handlers and tools.
 
 **Commit:** `feat(bridge): add the agent bridge protocol and dispatcher`
 
-### 🔲 Slice P2 — Opt-in toggle and port lifecycle
+### ✅ Slice P2 — Opt-in toggle and port lifecycle
 **Build:**
 - `nativeMessaging` added to `optional_permissions`.
 - An `agentBridgeEnabled` storage key.
@@ -377,7 +380,7 @@ Every later track only adds handlers and tools.
 
 **Commit:** `feat(bridge): opt-in native messaging connection with backoff`
 
-### 🔲 Slice P3 — Bridge package, `host` mode and the ping CLI
+### ✅ Slice P3 — Bridge package, `host` mode and the ping CLI
 **Build:**
 - The `bridge/` package scaffold (TypeScript, vitest, `bin: tabbuddy-bridge`).
 - Native-messaging framing (read and write).
@@ -404,13 +407,19 @@ Every later track only adds handlers and tools.
 
 **Commit:** `feat(bridge): add native messaging host mode and debug CLI`
 
-### 🔲 Slice P4 — Installer and `doctor`
+### ✅ Slice P4 — Installer and `doctor`
 **Build:**
 - `tabbuddy-bridge install`, `uninstall` and `doctor` for macOS
   Chrome/Brave/Edge.
 - Writes the manifests and a launcher script with an absolute Node path.
-- Pins the dev extension ID with a `key` in the dev manifest, and documents
-  how to pass the store ID.
+- Finds the extension ID by reading each browser's profiles for an unpacked
+  build named "TabBuddy", and takes extra IDs with `--extension-id`.
+  *(Changed while building: a pinned `key` would change the ID Chrome derives
+  from the folder path and orphan the user's saved snapshots, which are stored
+  per ID.)*
+- Brave on macOS reads host manifests only from Chrome's `NativeMessagingHosts`
+  folder, so for Brave `install` writes both folders and Chrome and Brave share
+  one manifest allowing both IDs. *(Found by testing.)*
 
 **Test:**
 - Unit tests for manifest generation and per-browser paths, using a fake
@@ -422,7 +431,7 @@ Every later track only adds handlers and tools.
 
 **Commit:** `feat(bridge): add install, uninstall and doctor commands`
 
-### 🔲 Slice P5 — `serve` mode with `list_snapshots` and `get_snapshot`
+### ✅ Slice P5 — `serve` mode with `list_snapshots` and `get_snapshot`
 **Build:**
 - The `serve` command, a stdio MCP server built with
   `@modelcontextprotocol/sdk`:
@@ -447,7 +456,7 @@ Every later track only adds handlers and tools.
 
 ## Track R — Read tools
 
-### 🔲 Slice R1 — Categories and open windows
+### ✅ Slice R1 — Categories and open windows
 **Build:**
 - `list_categories`.
 - `list_open_windows`, which lists tabs with:
@@ -465,7 +474,7 @@ Every later track only adds handlers and tools.
 
 **Commit:** `feat(bridge): add categories and open-window tools`
 
-### 🔲 Slice R2 — Search
+### ✅ Slice R2 — Search
 **Build:**
 - A pure `searchTabs(query, sources, scope)` function:
   - Matches case-insensitive tokens against title, URL and domain.
@@ -480,7 +489,7 @@ Every later track only adds handlers and tools.
 
 **Commit:** `feat(bridge): search saved, archived and open tabs`
 
-### 🔲 Slice R3 — Stale tabs and usage stats
+### ✅ Slice R3 — Stale tabs and usage stats
 **Build:**
 - `get_stale_tabs`:
   - Reuses `scoreTabImportance` and `findNudgeCandidates`.
@@ -501,7 +510,7 @@ Every later track only adds handlers and tools.
 
 ## Track W — Safe writes
 
-### 🔲 Slice W1 — Restore, focus and open
+### ✅ Slice W1 — Restore, focus and open
 **Build:**
 - `restore_snapshot`, which reuses `restoreSnapshot`, so usage count and lazy
   restore behave as they do in the dashboard.
@@ -517,7 +526,7 @@ Every later track only adds handlers and tools.
 
 **Commit:** `feat(bridge): restore snapshots and open tabs from an agent`
 
-### 🔲 Slice W2 — Save a window
+### ✅ Slice W2 — Save a window
 **Build:**
 - Refactor `createSnapshotFromCurrentWindow` into
   `createSnapshotFromWindow(windowId, name)`. The popup keeps its current
@@ -537,7 +546,7 @@ Every later track only adds handlers and tools.
 
 **Commit:** `feat(bridge): save a window as a snapshot from an agent`
 
-### 🔲 Slice W3 — Agent-made snapshots, update, rename and tag
+### ✅ Slice W3 — Agent-made snapshots, update, rename and tag
 **Build:**
 - `create_snapshot_from_urls`, which saves a snapshot without opening
   anything.
@@ -556,22 +565,88 @@ Every later track only adds handlers and tools.
 
 ---
 
+## Track T — Triage a big window (agent recommends, user decides)
+
+**Goal:** an agent looks at a window with many tabs, summarises the situation,
+recommends what to close, what to file into an existing snapshot and what into
+a new one, and the user agrees, customises or disagrees. Tabs the agent is
+unsure about go to TabBuddy's one-by-one screen. The reading and filing half
+is built; closing needs Track X.
+
+### ✅ Slice T1 — Duplicate tabs
+**Build:** `find_duplicate_tabs` and a shared `pageKey` (ignores `www`, http vs
+https, a trailing slash, tracking parameters, parameter order and a plain
+`#fragment`; route-style fragments stay distinct). Each group names the tab to
+keep and the extras.
+**Commit:** `feat(bridge): add duplicate-tab detection and a window summary`
+
+### ✅ Slice T2 — Window summary
+**Build:** `summarize_window`, a digest that stays small for a window with
+hundreds of tabs: counts, idle buckets, the biggest sites with sample titles
+and tab ids, duplicates, tabs already saved in another snapshot, and tabs that
+may hold unsaved work (guessed from address and title only).
+**Commit:** same as T1.
+
+### ✅ Slice T3 — Add to an existing snapshot
+**Build:** `add_tabs_to_snapshot`, the append tool "add this to my X snapshot"
+needs. It skips duplicates and reports every skip.
+**Commit:** `feat(bridge): add tabs and links to an existing snapshot`
+
+### 🔲 Slice T4 — One confirmed triage plan
+**Build:** `propose_triage_plan` takes buckets (leave alone, close, file into
+snapshot X, file into a new snapshot), checks every tab, and returns one
+proposal. Confirming it saves the snapshot first and only then closes, so a
+failed save closes nothing. Depends on X1–X3.
+**Test:** unit tests for validation and ordering; manual on a large window.
+
+### 🔲 Slice T5 — Manual triage for the unsure tabs
+**Build:** `start_manual_triage(windowId, tabIds?)` opens the existing
+one-by-one screen for just those tabs. Today that screen loads the whole window
+and closes the window when the list ends, so the screen needs a `tabs=` filter
+and must close the window only if no tabs remain.
+**Test:** unit test for the filter and the close rule; manual.
+
+### 🔲 Slice T6 — The `triage_window` prompt
+**Build:** an MCP prompt that scripts the conversation: ask what the window is
+for, propose by cluster, ask once, act. It asks once for the agent's own
+recommendations and does not re-ask when the user named the tabs, and it always
+asks for large batches.
+
+---
+
 ## Track X — Destructive actions (proposal → confirm → undo)
 
-### 🔲 Slice X1 — Proposal store and archiving
+### ✅ Slice X1 — Proposal store and archiving
 **Build:**
 - A pure proposal store: create, get, consume, expire after 5 minutes.
 - `propose_archive_tabs` and `confirm_proposal`:
-  - Confirm rechecks that each tab still exists and has the same URL.
-  - Confirm archives through `archiveTab`.
-  - A toast appears: "Agent archived N tabs".
+  - Confirm rechecks that each tab still exists, shows the same page and is
+    not now pinned, playing sound or part of a snapshot window. If any check
+    fails, nothing at all is changed and the proposal is used up
+    (`tabs_changed`).
+  - Confirm archives through a new batch `archiveTabs`: one write to the
+    Archived snapshot, then the tabs are closed one by one, so a failed save
+    closes nothing.
+  - Pinned tabs, tabs playing sound and tabs in a snapshot's live window are
+    left out of a proposal unless the caller sets `includeProtected`, which
+    the tool description limits to tabs the user explicitly named.
+  - `propose_archive_tabs` is marked read-only (it changes nothing in the
+    browser) and `confirm_proposal` is marked destructive, so a client such as
+    Claude Code asks the user before running it.
+- *(Changed while building: proposals live in `storage.session`, not in memory,
+  so a service-worker restart between "propose" and "confirm" cannot void an
+  approved proposal; they still expire after 5 minutes and are cleared when the
+  browser restarts. The "Agent archived N tabs" toast moves to X3: the toast
+  queue lives in the dashboard page, which the background cannot call, and X3's
+  activity log, which the dashboard watches in storage, is the natural channel.)*
 
 **Test:**
 - Unit tests for the proposal store: expiry, single use, unknown id.
 - A unit test for the tab-changed check.
 - Manual: "clean up my stale tabs".
   - The agent shows the list and waits.
-  - After you agree, the tabs are archived and the toast appears.
+  - After you agree, the tabs are archived and closed, and they show up in
+    the Archived snapshot.
   - Confirming the same proposal twice fails.
 
 **Commit:** `feat(bridge): archive tabs through a confirmed proposal`
@@ -701,8 +776,35 @@ passes, and `ping` and `list_snapshots` work.
 
 | Milestone | Slices | What you can demo |
 |---|---|---|
-| **M1 — "Hello, tabs"** | P1–P5 | Claude Code lists your snapshots |
-| **M2 — Useful read-only agent** | R1–R3 | "What am I working on?" and "find that page" |
-| **M3 — Workspace switching** | W1–W3 | "Open Job Hunt", "save this as Research" |
+| ✅ **M1 — "Hello, tabs"** | P1–P5 | Claude Code lists your snapshots |
+| ✅ **M2 — Useful read-only agent** | R1–R3 | "What am I working on?" and "find that page" |
+| ✅ **M3 — Workspace switching** | W1–W3 | "Open Job Hunt", "save this as Research" |
+| ✅ **M3b — Triage assistant, reading and filing** | T1–T3 | "Summarise this window and recommend a cleanup"; file tabs into new or existing snapshots (closing is still manual) |
 | **M4 — Safe cleanup** | X1–X3 | "Clean up my browser" with approval and undo |
+| **M4b — Agentic triage** | T4–T6 | The full loop: recommend, user decides, one confirmation, unsure tabs go to manual triage |
 | **M5 — Release** | X4, S1–S4 | A one-command install for other users |
+
+## Notes from building
+
+Things the tests and real use showed that the spec above did not predict:
+
+- **MV3 service workers sleep**, dropping `setTimeout` retries. Waits of 30
+  seconds or more use `alarms`, which wake the worker.
+- **An answer can arrive before the request write returns**, so the host
+  registers the waiting caller before writing.
+- **Brave reads Chrome's `NativeMessagingHosts` folder**, not its own (see P4).
+- **`open_urls` avoids snapshot windows**: tabs added to a window that belongs
+  to a snapshot would be saved into it by the next Update, so it opens a new
+  window instead.
+- **`save_window` on a window that already has a snapshot** saves an unlinked
+  copy rather than stealing the link.
+- **`update_snapshot_from_window` replaces the saved tabs**, so it is marked
+  destructive, reports the tab count before and after, and the description
+  tells the model to confirm first.
+- **`add_tabs_to_snapshot` warns via `snapshotIsOpen`** that updating an open
+  snapshot from its window would drop what was added.
+- **Search ranks by how rare each word is** among the tabs searched, and
+  ignores words about looking for a tab ("page", "tab", "open"), after a
+  sentence-style query pulled in unrelated recent tabs.
+- **The fake browser gaps**: it never creates tabs from a `url` list and has no
+  `tabGroups.query`, so tests mock them the way Chrome behaves.
