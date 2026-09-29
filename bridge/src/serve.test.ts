@@ -37,11 +37,15 @@ describe('tools', () => {
     'list_categories',
     'list_open_windows',
     'list_snapshots',
+    'propose_archive_tabs',
     'search_tabs',
     'summarize_window',
   ];
+  // the tools that can lose something: they replace saved tabs, or close tabs
+  const DESTRUCTIVE = ['confirm_proposal', 'update_snapshot_from_window'];
   const WRITES = [
     'add_tabs_to_snapshot',
+    'confirm_proposal',
     'create_snapshot_from_urls',
     'focus_tab',
     'open_urls',
@@ -52,7 +56,7 @@ describe('tools', () => {
     'update_snapshot_from_window',
   ];
 
-  it('offers nine read-only tools and nine that change things', async () => {
+  it('offers ten read-only tools and ten that change things', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...READ_ONLY, ...WRITES].sort());
@@ -62,13 +66,77 @@ describe('tools', () => {
     }
   });
 
-  it('marks every write tool as not read-only, and all but the update as non-destructive', async () => {
+  it('marks every write tool as not read-only, and only the two that can lose something as destructive', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     for (const tool of tools.filter((t) => WRITES.includes(t.name))) {
       expect(tool.annotations?.readOnlyHint).toBe(false);
-      expect(tool.annotations?.destructiveHint).toBe(tool.name === 'update_snapshot_from_window');
+      expect(tool.annotations?.destructiveHint).toBe(DESTRUCTIVE.includes(tool.name));
     }
+  });
+
+  it('proposing is safe to auto-approve, but confirming asks the client for permission', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const propose = tools.find((t) => t.name === 'propose_archive_tabs')!;
+    const confirm = tools.find((t) => t.name === 'confirm_proposal')!;
+    expect(propose.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+    expect(propose.description).toContain('changes NOTHING');
+    expect(confirm.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, idempotentHint: false });
+    expect(confirm.description).toContain('ARCHIVES AND CLOSES');
+    expect(confirm.description).toContain('tabs_changed');
+    expect(confirm.description).toContain('proposal_expired');
+  });
+
+  it('tells the model to show titles and get a yes before confirming', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const propose = tools.find((t) => t.name === 'propose_archive_tabs')!.description!;
+    expect(propose).toContain('never raw ids');
+    expect(propose).toContain('clear yes');
+    expect(propose).toContain('more than 10 tabs, always ask');
+    expect(propose).toContain('includeProtected');
+  });
+
+  it('forwards propose and confirm arguments', async () => {
+    const send = vi.fn(async () => ({ ok: true }));
+    const client = await connect(send);
+    await client.callTool({ name: 'propose_archive_tabs', arguments: { tabIds: [1, 2], includeProtected: true } });
+    expect(send).toHaveBeenLastCalledWith('proposeArchiveTabs', { tabIds: [1, 2], includeProtected: true });
+    await client.callTool({ name: 'confirm_proposal', arguments: { proposalId: 'abc' } });
+    expect(send).toHaveBeenLastCalledWith('confirmProposal', { proposalId: 'abc' });
+  });
+
+  it('rejects malformed propose and confirm arguments without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    const attempts = [
+      { name: 'propose_archive_tabs', arguments: {} },
+      { name: 'propose_archive_tabs', arguments: { tabIds: [] } },
+      { name: 'propose_archive_tabs', arguments: { tabIds: ['1'] } },
+      { name: 'propose_archive_tabs', arguments: { tabIds: [1.5] } },
+      { name: 'propose_archive_tabs', arguments: { tabIds: Array.from({ length: 101 }, (_, i) => i) } },
+      { name: 'propose_archive_tabs', arguments: { tabIds: [1], includeProtected: 'yes' } },
+      { name: 'confirm_proposal', arguments: {} },
+      { name: 'confirm_proposal', arguments: { proposalId: '' } },
+    ];
+    for (const attempt of attempts) {
+      const result = await client.callTool(attempt).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('shows the agent why a confirmation was refused', async () => {
+    const client = await connect(async () => {
+      throw new BridgeCallError({
+        code: 'tabs_changed',
+        message: 'Nothing was archived or closed: 1 of the 3 tabs changed since the proposal. Propose again with fresh tab ids.',
+      });
+    });
+    const result = await client.callTool({ name: 'confirm_proposal', arguments: { proposalId: 'p' } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/^tabs_changed: Nothing was archived or closed/);
   });
 
   it('marks update_snapshot_from_window as destructive, since it replaces saved tabs', async () => {

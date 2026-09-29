@@ -22,7 +22,9 @@ export type Method =
   | 'tagSnapshots'
   | 'findDuplicateTabs'
   | 'summarizeWindow'
-  | 'addTabsToSnapshot';
+  | 'addTabsToSnapshot'
+  | 'proposeArchiveTabs'
+  | 'confirmProposal';
 
 export type ErrorCode =
   | 'unknown_method'
@@ -30,6 +32,7 @@ export type ErrorCode =
   | 'invalid_params'
   | 'reserved_name'
   | 'proposal_expired'
+  | 'tabs_changed'
   | 'bridge_disabled'
   | 'browser_unreachable'
   | 'internal';
@@ -478,3 +481,51 @@ export interface AddTabsToSnapshotResult {
   /** True if the snapshot is open in a window. Pressing Update on it later would replace its saved tabs with that window's, dropping what was added. */
   snapshotIsOpen: boolean;
 }
+
+/** Most tabs one proposal may cover. */
+export const MAX_PROPOSAL_TABS = 100;
+/** How long a proposal can be confirmed for. */
+export const PROPOSAL_TTL_MS = 5 * 60_000;
+
+export interface ProposeArchiveTabsParams {
+  tabIds: number[];
+  /** Also propose pinned tabs, tabs playing sound and tabs in a snapshot's live window. Only when the user explicitly asked for those tabs. */
+  includeProtected?: boolean;
+}
+
+export interface ProposalTab {
+  tabId: number;
+  windowId: number;
+  title: string;
+  /** The real page (a lazy placeholder shows the page it stands for). */
+  url: string;
+}
+
+export interface ProposalResult {
+  proposalId: string;
+  action: 'archive';
+  /** One sentence describing what confirming will do. */
+  summary: string;
+  /** When the proposal stops being confirmable (ms since epoch). */
+  expiresAt: number;
+  expiresInSeconds: number;
+  /** What would be archived: show these titles to the user. */
+  tabs: ProposalTab[];
+  /** Tabs left out, and why. */
+  skipped: { tabId: number; reason: string }[];
+}
+
+export interface ConfirmProposalParams {
+  proposalId: string;
+}
+
+export interface ConfirmArchiveResult {
+  action: 'archive';
+  /** Tabs saved to the Archived snapshot. */
+  archived: number;
+  /** Tabs actually closed (a tab the user already closed doesn't count). */
+  closed: number;
+  archivedSnapshot: { id: string; tabCount: number };
+}
+
+export type ConfirmProposalResult = ConfirmArchiveResult;

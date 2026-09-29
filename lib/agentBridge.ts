@@ -28,6 +28,7 @@ import {
   MAX_TITLE_LENGTH,
 } from '../bridge/protocol';
 import { focusTab, openUrls, parseOpenUrlsParams, parseTabId } from './agentOpen';
+import { confirmProposal, proposeArchiveTabs } from './agentProposals';
 import { resolveWindow, saveWindow } from './agentSave';
 import {
   addTabsToSnapshot,
@@ -268,6 +269,8 @@ export const handlers: HandlerTable = {
   saveWindow: (params) => saveWindow(params),
   createSnapshotFromUrls: (params) => createSnapshotFromUrls(params),
   addTabsToSnapshot: (params) => addTabsToSnapshot(params),
+  proposeArchiveTabs: (params) => proposeArchiveTabs(params),
+  confirmProposal: (params) => confirmProposal(params),
   updateSnapshotFromWindow: (params) => updateSnapshotFromWindow(params),
   renameSnapshot: (params) => renameSnapshotTo(params),
   tagSnapshots: (params) => tagSnapshots(params),

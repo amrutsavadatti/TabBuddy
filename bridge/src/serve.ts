@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import {
   MAX_ADD_TABS,
+  MAX_PROPOSAL_TABS,
   MAX_DUPLICATE_GROUPS,
   MAX_SUMMARY_FLAGGED,
   MAX_SUMMARY_SITES,
@@ -500,6 +501,61 @@ export function createServer(send: Send): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     ({ id, tabIds, urls }) => runTool(send, 'addTabsToSnapshot', { id, tabIds, urls }),
+  );
+
+  server.registerTool(
+    'propose_archive_tabs',
+    {
+      title: 'Propose archiving tabs (step 1 of 2)',
+      description:
+        'Step 1 of 2 for archiving tabs: works out what archiving these open tabs would do and changes ' +
+        'NOTHING. Archiving saves the tabs into TabBuddy\'s reserved "Archived" snapshot, a safe place ' +
+        'the user can browse and reopen from, and then closes them. Get tab ids from list_open_windows, ' +
+        'search_tabs, summarize_window, find_duplicate_tabs or get_stale_tabs. It returns a proposalId, ' +
+        'a summary, the exact tabs (titles and pages) that would be archived, and "skipped": tabs left ' +
+        'out and why. Pinned tabs, tabs playing sound and tabs in a snapshot\'s open window are left ' +
+        'alone unless includeProtected is true; set that only when the user explicitly asked for those ' +
+        'very tabs. Show the user the list by title (never raw ids) and get a clear yes before calling ' +
+        'confirm_proposal. You may skip asking only if the user has already told you to archive these ' +
+        'specific tabs; for more than 10 tabs, always ask. A proposal lasts 5 minutes and works once, so ' +
+        `confirm promptly after they agree, and propose again if it expires. Up to ${MAX_PROPOSAL_TABS} ` +
+        'tabs per proposal.',
+      inputSchema: {
+        tabIds: z
+          .array(z.number().int())
+          .min(1)
+          .max(MAX_PROPOSAL_TABS)
+          .describe('Open tabs to archive, from list_open_windows, search_tabs or summarize_window.'),
+        includeProtected: z
+          .boolean()
+          .optional()
+          .describe('Also propose pinned tabs, tabs playing sound and snapshot-owned tabs. Only if the user explicitly asked for those tabs.'),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    ({ tabIds, includeProtected }) => runTool(send, 'proposeArchiveTabs', { tabIds, includeProtected }),
+  );
+
+  server.registerTool(
+    'confirm_proposal',
+    {
+      title: 'Carry out a proposal (step 2 of 2)',
+      description:
+        'Step 2 of 2: carries out a proposal from a propose_ tool. For propose_archive_tabs this ARCHIVES ' +
+        'AND CLOSES the tabs. Only call it after the user has agreed to the exact list you showed them ' +
+        '(see propose_archive_tabs for when asking can be skipped). A proposal works once and for five ' +
+        'minutes only. Before acting, every tab is checked again: if any has been closed, now shows a ' +
+        'different page, or has become pinned or started playing sound, NOTHING is changed and you get ' +
+        'tabs_changed. Tell the user and propose again with fresh tab ids. proposal_expired means the ' +
+        'proposal timed out or was already used. On success it says how many tabs were archived and ' +
+        'closed. The tabs are then in the reserved Archived snapshot (find them with search_tabs, scope ' +
+        'archived), and the user can reopen them from it in the TabBuddy dashboard. There is no undo tool yet.',
+      inputSchema: {
+        proposalId: z.string().min(1).describe('The proposalId returned by a propose_ tool.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    ({ proposalId }) => runTool(send, 'confirmProposal', { proposalId }),
   );
 
   server.registerTool(

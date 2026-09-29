@@ -63,14 +63,27 @@ async function getOrCreateArchivedSnapshot(): Promise<Snapshot> {
  * use) and closes the real browser tab. Used by the nudge popup's
  * "Archive & Close" action. */
 export async function archiveTab(tab: TriageTab): Promise<void> {
+  await archiveTabs([tab]);
+}
+
+/** Appends the tabs to the reserved "Archived" snapshot in a single write,
+ * and only then closes them, one by one, so a failed save closes nothing and
+ * a tab that is already gone doesn't stop the others. Returns how many tabs
+ * the browser actually closed. */
+export async function archiveTabs(
+  tabs: TriageTab[],
+): Promise<{ snapshotId: string; snapshotTabCount: number; closed: number }> {
   const archived = await getOrCreateArchivedSnapshot();
-  await updateSnapshot(archived.id, {
-    tabs: [...archived.tabs, tabToSnapshotTab(tab)],
-    updatedAt: Date.now(),
-  });
-  try {
-    await browser.tabs.remove(tab.id);
-  } catch {
-    // already closed by the user in the meantime — fine either way
+  const all = [...archived.tabs, ...tabs.map(tabToSnapshotTab)];
+  await updateSnapshot(archived.id, { tabs: all, updatedAt: Date.now() });
+  let closed = 0;
+  for (const tab of tabs) {
+    try {
+      await browser.tabs.remove(tab.id);
+      closed += 1;
+    } catch {
+      // already closed by the user in the meantime — fine either way
+    }
   }
+  return { snapshotId: archived.id, snapshotTabCount: all.length, closed };
 }
