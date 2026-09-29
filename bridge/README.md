@@ -29,56 +29,59 @@ node dist/src/cli.js ping                       # the extension's version
 node dist/src/cli.js call listSnapshots '{}'    # any request, any params
 ```
 
-## Installing the host by hand (until `install` arrives in slice P4)
+## Install
 
-1. **Find the extension ID** at `chrome://extensions` (turn on Developer mode).
+Until the package is published, run the built CLI directly (from `bridge/`):
 
-2. **Create a launcher.** The browser does not use your shell's `PATH`, so it
-   must name Node by absolute path (`which node`):
+```bash
+node dist/src/cli.js install     # registers the host with your browsers (macOS)
+node dist/src/cli.js doctor      # checks the whole chain
+node dist/src/cli.js uninstall   # removes what install wrote
+```
 
-   ```sh
-   mkdir -p ~/.tabbuddy && cat > ~/.tabbuddy/tabbuddy-bridge-host <<'SH'
-   #!/bin/sh
-   exec /ABSOLUTE/PATH/TO/node /ABSOLUTE/PATH/TO/TabBuddy/bridge/dist/src/cli.js host "$@"
-   SH
-   chmod +x ~/.tabbuddy/tabbuddy-bridge-host
-   ```
+`install`:
 
-3. **Register the host** with the browser. Save this as
-   `com.tabbuddy.bridge.json` in the browser's `NativeMessagingHosts` folder:
+- writes a launcher, `~/.tabbuddy/tabbuddy-bridge-host`, that runs Node **by
+  absolute path** (the browser does not use your shell's `PATH`, so nvm, Volta
+  and Homebrew Node aren't found otherwise);
+- finds TabBuddy in each installed browser (Chrome, Brave, Edge) by reading its
+  profiles, and writes a host manifest that allows exactly that extension ID.
+  Brave on macOS only looks in **Chrome's** `NativeMessagingHosts` folder (tested;
+  its own folder is ignored), so for Brave `install` writes both. Chrome and
+  Brave then share one manifest that allows both extension IDs.
 
-   ```json
-   {
-     "name": "com.tabbuddy.bridge",
-     "description": "TabBuddy agent bridge",
-     "path": "/Users/YOU/.tabbuddy/tabbuddy-bridge-host",
-     "type": "stdio",
-     "allowed_origins": ["chrome-extension://YOUR_EXTENSION_ID/"]
-   }
-   ```
+Options: `--browser chrome|brave|edge` (repeatable) to limit it, and
+`--extension-id <id>` (repeatable) to allow an ID it can't detect, such as a
+store install or a browser it isn't scanning.
 
-   | Browser (macOS) | Folder |
-   |---|---|
-   | Chrome | `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/` |
-   | Brave | `~/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/` |
-   | Edge | `~/Library/Application Support/Microsoft Edge/NativeMessagingHosts/` |
+Then **restart the browser** and switch on *Settings → Automation → Agent
+bridge* in TabBuddy. The extension connects within a few seconds; run `doctor`
+to confirm.
 
-   The trailing slash in `allowed_origins` is required.
+Moving the TabBuddy folder, or loading it from a different path, gives the
+unpacked extension a new ID. Run `install` again afterwards; `doctor` will tell
+you when the ID no longer matches.
 
-4. **Restart the browser**, then in TabBuddy's dashboard turn on
-   *Settings → Automation → Agent bridge*. The extension connects within a few
-   seconds (the retry delays are 5s, 10s, 20s ...). Run `ping` to check.
+### What `doctor` checks
+
+In order, stopping at the first problem and printing a fix for it:
+
+1. the launcher exists, is executable, and its Node and bridge paths exist;
+2. each installed browser has a host manifest pointing at the launcher;
+3. the manifest allows the extension ID the browser has loaded;
+4. something is listening on the socket (the browser started the host);
+5. the extension answers `hello` with a matching protocol version.
 
 ## Troubleshooting
 
 - **The host's log** is `~/.tabbuddy/bridge.log`. stdout is reserved for the
   browser, and the browser hides stderr, so nothing else is written anywhere.
 - **`Specified native messaging host not found`** in the extension's service
-  worker console: the manifest is in the wrong folder, has the wrong `name`, or
-  the browser wasn't restarted.
+  worker console: run `doctor`. Usually the manifest is missing, or the browser
+  wasn't restarted after `install`.
 - **`Access to the specified native messaging host is forbidden`**: the ID in
-  `allowed_origins` doesn't match the extension's ID.
-- **`Native host has exited`**: the launcher's Node path is wrong. Run the
-  launcher by hand; it should sit waiting for input.
+  `allowed_origins` doesn't match the extension's ID; run `install` again.
+- **`Native host has exited`**: the launcher's Node path is wrong (`doctor`
+  checks this). Run the launcher by hand; it should sit waiting for input.
 - **`Another TabBuddy bridge host is already running`** in the log: a second
   browser or profile has the bridge on. Only one at a time for now.

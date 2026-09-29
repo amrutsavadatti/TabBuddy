@@ -7,5 +7,5 @@
     "sourceMap": true
   },
   "include": ["protocol.ts", "src"],
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": ["src/**/*.test.ts", "src/testHome.ts"]
 }
