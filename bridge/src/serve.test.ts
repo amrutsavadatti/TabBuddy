@@ -56,12 +56,13 @@ describe('tools', () => {
     'rename_snapshot',
     'restore_snapshot',
     'save_window',
+    'start_manual_triage',
     'tag_snapshots',
     'undo',
     'update_snapshot_from_window',
   ];
 
-  it('offers fourteen read-only tools and eleven that change things', async () => {
+  it('offers fourteen read-only tools and twelve that change things', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...READ_ONLY, ...WRITES].sort());
@@ -213,6 +214,7 @@ describe('tools', () => {
     'rename_snapshot',
     'restore_snapshot',
     'save_window',
+    'start_manual_triage',
     'tag_snapshots',
     'update_snapshot_from_window',
   ];
@@ -252,6 +254,7 @@ describe('tools', () => {
       ['propose_close_tabs', { tabIds: [1] }, 'proposeCloseTabs'],
       ['propose_remove_from_snapshot', { id: 's1', indexes: [0] }, 'proposeRemoveFromSnapshot'],
       ['propose_triage_plan', { close: [1] }, 'proposeTriagePlan'],
+      ['start_manual_triage', { tabIds: [1] }, 'startManualTriage'],
     ];
     expect(calls.map(([name]) => name).sort()).toEqual([...TAKES_REQUEST].sort());
     for (const [name, args, method] of calls) {
@@ -377,6 +380,53 @@ describe('tools', () => {
     const result = await client.callTool({ name: 'propose_triage_plan', arguments: { close: [2], archive: [2] } });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain('only one bucket');
+  });
+
+  it('describes handing tabs to the user: nothing closed, window untouched, say why first', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === 'start_manual_triage')!;
+    for (const phrase of [
+      'one-by-one sorting screen',
+      'unsure about',
+      'propose_triage_plan',
+      'tell the user which tabs and why',
+      'does not close or save anything itself',
+      'window is never closed',
+      'one window',
+      'skipped',
+      'no report',
+    ]) {
+      expect(tool.description).toContain(phrase);
+    }
+    expect(tool.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    expect(tool.inputSchema.required).toEqual(['tabIds']);
+  });
+
+  it('forwards the tabs handed over, and the request phrase', async () => {
+    const send = vi.fn(async () => ({ opened: true }));
+    const client = await connect(send);
+    await client.callTool({ name: 'start_manual_triage', arguments: { tabIds: [3, 4], request: 'clean up my window' } });
+    expect(send).toHaveBeenLastCalledWith('startManualTriage', { tabIds: [3, 4], request: 'clean up my window' });
+  });
+
+  it('rejects a hand-over with no tabs, or malformed tab ids, without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    const attempts = [
+      {},
+      { tabIds: [] },
+      { tabIds: ['1'] },
+      { tabIds: [1.5] },
+      { tabIds: 'x' },
+      { tabIds: Array.from({ length: 301 }, (_, i) => i) },
+      { tabIds: [1], request: 'x'.repeat(121) },
+    ];
+    for (const arguments_ of attempts) {
+      const result = await client.callTool({ name: 'start_manual_triage', arguments: arguments_ }).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('forwards propose and confirm arguments', async () => {

@@ -78,6 +78,7 @@ import {
 import type { ActivityEntry } from '../../bridge/protocol';
 import { listActivity } from '@/lib/activityLog';
 import { describeUndoResult, newActivityToasts } from '@/lib/agentActivityView';
+import { parseTriageTabsParam, TRIAGE_TABS_PARAM } from '@/lib/manualTriage';
 import { undoActivity } from '@/lib/undo';
 import { AgentActivityDialog } from './AgentActivityDialog';
 import { NudgeSettingsDialog } from './NudgeSettingsDialog';
@@ -825,6 +826,10 @@ function App() {
     const parsed = raw ? Number(raw) : NaN;
     return Number.isFinite(parsed) ? parsed : null;
   });
+  // Set when an agent handed over just some tabs to sort; null means the whole window.
+  const [triageTabIds, setTriageTabIds] = useState<number[] | null>(() =>
+    parseTriageTabsParam(new URLSearchParams(window.location.search).get(TRIAGE_TABS_PARAM)),
+  );
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -1326,8 +1331,10 @@ function App() {
     return (
       <TriageView
         windowId={triageWindowId}
+        onlyTabIds={triageTabIds}
         onExit={() => {
           setTriageWindowId(null);
+          setTriageTabIds(null);
           window.history.replaceState({}, '', '/dashboard.html');
           getSnapshots().then(setSnapshots);
         }}

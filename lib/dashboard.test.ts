@@ -38,4 +38,24 @@ describe('openTriageSession', () => {
       url: browser.runtime.getURL('/dashboard.html?triage=42'),
     });
   });
+
+  it('for a whole window, neither picks the window nor steals focus, as before', async () => {
+    const createSpy = vi.spyOn(browser.tabs, 'create');
+    const updateWindow = vi.spyOn(browser.windows, 'update');
+    await openTriageSession(42);
+    expect(createSpy.mock.calls[0]![0]).toEqual({ url: browser.runtime.getURL('/dashboard.html?triage=42') });
+    expect(updateWindow).not.toHaveBeenCalled();
+  });
+
+  it('for handed-over tabs, opens in that window, in front, and brings the window forward', async () => {
+    const createSpy = vi.spyOn(browser.tabs, 'create');
+    const updateWindow = vi.spyOn(browser.windows, 'update').mockResolvedValue({} as any);
+    await openTriageSession(42, [3, 4]);
+    expect(createSpy).toHaveBeenCalledWith({
+      url: browser.runtime.getURL('/dashboard.html?triage=42&tabs=3,4'),
+      windowId: 42,
+      active: true,
+    });
+    expect(updateWindow).toHaveBeenCalledWith(42, { focused: true });
+  });
 });

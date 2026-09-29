@@ -723,6 +723,34 @@ export function createServer(send: Send): McpServer {
   );
 
   server.registerTool(
+    'start_manual_triage',
+    {
+      title: 'Hand tabs to the user to sort one by one',
+      description:
+        'Hand tabs you are unsure about to the user: opens TabBuddy\'s one-by-one sorting screen in the ' +
+        'browser, showing just these tabs, and brings that window forward. The user then decides each ' +
+        'tab themselves (close it, or file it into a snapshot) and can stop at any time. Use it for the ' +
+        'tabs you left out of propose_triage_plan because you could not tell whether they matter, and ' +
+        'tell the user which tabs and why before you do. It does not close or save anything itself, ' +
+        'every other tab in the window stays exactly as it is, and the window is never closed. The ' +
+        'tabs must all be in one window. Closed and private tabs and TabBuddy\'s own pages are left ' +
+        'out (see "skipped"); pinned tabs and tabs playing sound are included, because the user, not ' +
+        'you, makes each call. You get no report of what the user decides: list the open windows ' +
+        `again later to see what is left. Up to ${MAX_TRIAGE_TABS} tabs.`,
+      inputSchema: {
+        tabIds: z
+          .array(z.number().int())
+          .min(1)
+          .max(MAX_TRIAGE_TABS)
+          .describe('The tabs you are unsure about, all in one window, from list_open_windows or summarize_window.'),
+        request: requestField,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    ({ tabIds, request }) => runTool(send, 'startManualTriage', { tabIds, request }),
+  );
+
+  server.registerTool(
     'get_agent_activity',
     {
       title: 'What the agent has done',

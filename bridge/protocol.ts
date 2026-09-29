@@ -27,6 +27,7 @@ export type Method =
   | 'proposeCloseTabs'
   | 'proposeRemoveFromSnapshot'
   | 'proposeTriagePlan'
+  | 'startManualTriage'
   | 'confirmProposal'
   | 'undo'
   | 'getAgentActivity';
@@ -704,4 +705,20 @@ export interface ConfirmTriageResult {
   filed: { snapshotId: string; name: string; added: number; alreadyThere: number }[];
   /** New snapshots created. */
   created: { snapshotId: string; name: string; tabCount: number }[];
+}
+
+export interface StartManualTriageParams {
+  /** The tabs the agent is unsure about, all in one window. */
+  tabIds: number[];
+  request?: string;
+}
+
+export interface StartManualTriageResult {
+  /** The sorting screen is now open, in the window the tabs are in. */
+  opened: true;
+  windowId: number;
+  /** How many tabs the user will be asked about. */
+  tabCount: number;
+  /** Tabs left out, and why. */
+  skipped: { tabId: number; reason: string }[];
 }

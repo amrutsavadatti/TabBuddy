@@ -33,6 +33,7 @@ import { getAccentColor } from '@/lib/color';
 import { resolveLazyTab } from '@/lib/lazyTab';
 import { ARCHIVED_ACCENT_COLOR, isArchivedSnapshot, renameSnapshot } from '@/lib/archive';
 import { Button } from '@/components/ui/button';
+import { closesWindowWhenDone } from '@/lib/manualTriage';
 import type { Snapshot } from '@/lib/types';
 
 type HistoryEntry =
@@ -164,9 +165,12 @@ function DraggableCard({ tab }: { tab: TriageTab }) {
 
 export function TriageView({
   windowId,
+  onlyTabIds = null,
   onExit,
 }: {
   windowId: number;
+  /** Just these tabs, handed over by an agent that was unsure about them. Null sorts the whole window. */
+  onlyTabIds?: number[] | null;
   onExit: () => void;
 }) {
   const [tabs, setTabs] = useState<TriageTab[] | null>(null);
@@ -186,7 +190,12 @@ export function TriageView({
 
   useEffect(() => {
     (async () => {
-      const rawTabs = await browser.tabs.query({ windowId });
+      // A handed-over list is shown in the order given, skipping any tab that has since gone.
+      const rawTabs = onlyTabIds
+        ? (await Promise.all(onlyTabIds.map((id) => browser.tabs.get(id).catch(() => undefined)))).filter(
+            (t): t is NonNullable<typeof t> => t !== undefined && !t.incognito,
+          )
+        : await browser.tabs.query({ windowId });
       setTabs(
         rawTabs
           .filter((t) => t.id !== undefined)
@@ -202,14 +211,16 @@ export function TriageView({
       const snapshots = await getSnapshots();
       setExistingSnapshots([...snapshots].sort((a, b) => b.updatedAt - a.updatedAt));
     })();
-  }, [windowId]);
+  }, [windowId, onlyTabIds?.join(',')]);
 
   const currentTab = tabs?.[currentIndex] ?? null;
 
   const finishIfDone = async (nextIndex: number) => {
     if (!tabs) return;
     if (nextIndex >= tabs.length) {
-      await browser.windows.remove(windowId);
+      // Only a whole-window session closes the window: the user has been through every tab in
+      // it. A few handed-over tabs must leave it alone, or tabs the user never saw would close.
+      if (closesWindowWhenDone(onlyTabIds)) await browser.windows.remove(windowId);
       onExit();
       return;
     }
@@ -301,18 +312,31 @@ export function TriageView({
     }
   };
 
+  /** Brings back the tab that was just closed. The browser gives a restored tab a NEW
+   * id, so the card it came from is pointed at that id: otherwise closing it a second
+   * time would try the old id and fail with "may already be closed". The restored
+   * session is a tab, or a whole window if it was the last tab in one. */
+  const restoreLastClosedTab = async () => {
+    const restored = await browser.sessions.restore();
+    const restoredId = restored?.tab?.id ?? restored?.window?.tabs?.[0]?.id;
+    if (restoredId !== undefined) {
+      // The step being undone was taken on the card just before the current one.
+      const undoneIndex = Math.max(0, currentIndex - 1);
+      setTabs((prev) => prev && prev.map((t, i) => (i === undoneIndex ? { ...t, id: restoredId } : t)));
+    }
+    await refocusSelf();
+  };
+
   const handleUndo = async () => {
     const last = history[history.length - 1];
     if (!last) return;
     setError(null);
     try {
       if (last.type === 'delete') {
-        await browser.sessions.restore();
-        await refocusSelf();
+        await restoreLastClosedTab();
       } else {
         // The tab was closed after being filed away — bring it back too.
-        await browser.sessions.restore();
-        await refocusSelf();
+        await restoreLastClosedTab();
         const remainingCount = await removeLastTabFromSnapshot(last.snapshotId);
         const keepEmpty = renamedIds.has(last.snapshotId);
         if (last.wasNewlyCreatedSnapshot && remainingCount === 0 && !keepEmpty) {
@@ -376,8 +400,9 @@ export function TriageView({
         <div className="flex items-center justify-center gap-2 border-b border-border bg-muted/30 px-4 py-2 text-center text-xs text-muted-foreground">
           <Sparkles size={14} className="shrink-0 text-primary" />
           <span>
-            Go through a messy window one tab at a time: close what you don't need, or file the
-            rest into a snapshot.
+            {onlyTabIds === null
+              ? "Go through a messy window one tab at a time: close what you don't need, or file the rest into a snapshot."
+              : `Your assistant wasn't sure about ${tabs.length === 1 ? 'this tab' : `these ${tabs.length} tabs`}. Decide ${tabs.length === 1 ? 'it' : 'each one'}: close it, or file it into a snapshot. Every other tab in the window stays exactly as it is.`}
           </span>
         </div>
 

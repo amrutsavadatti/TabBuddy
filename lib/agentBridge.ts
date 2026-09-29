@@ -31,6 +31,7 @@ import {
 import { listActivity, recordActivity } from './activityLog';
 import { focusTab, openUrls, parseOpenUrlsParams, parseTabId } from './agentOpen';
 import { parseRequest } from './agentRequest';
+import { startManualTriage } from './agentManualTriage';
 import { proposeTriagePlan } from './agentTriage';
 import {
   confirmProposal,
@@ -282,6 +283,7 @@ const rawHandlers: HandlerTable = {
   proposeArchiveTabs: (params) => proposeArchiveTabs(params),
   proposeCloseTabs: (params) => proposeCloseTabs(params),
   proposeTriagePlan: (params) => proposeTriagePlan(params),
+  startManualTriage: (params) => startManualTriage(params),
   proposeRemoveFromSnapshot: (params) => proposeRemoveFromSnapshot(params),
   confirmProposal: (params) => confirmProposal(params),
   updateSnapshotFromWindow: (params) => updateSnapshotFromWindow(params),
@@ -389,6 +391,10 @@ const ACTIVITY: Record<string, { tool: string; summary: (result: any) => string 
     tool: 'tag_snapshots',
     summary: (r) =>
       `Tagged ${plural(r.tagged, 'snapshot', 'snapshots')} with ${r.categories.map((c: { name: string }) => c.name).join(', ')}`,
+  },
+  startManualTriage: {
+    tool: 'start_manual_triage',
+    summary: (r) => `Handed ${plural(r.tabCount, 'tab', 'tabs')} to you to sort one by one`,
   },
   addTabsToSnapshot: {
     tool: 'add_tabs_to_snapshot',

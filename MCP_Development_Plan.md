@@ -615,12 +615,32 @@ rollback, and each undo case; live with throwaway tabs (propose changes nothing,
 confirm, undo, back to the start).
 **Commit:** `feat(bridge): plan a whole cleanup in one confirmed triage plan`
 
-### 🔲 Slice T5 — Manual triage for the unsure tabs
-**Build:** `start_manual_triage(windowId, tabIds?)` opens the existing
-one-by-one screen for just those tabs. Today that screen loads the whole window
-and closes the window when the list ends, so the screen needs a `tabs=` filter
-and must close the window only if no tabs remain.
-**Test:** unit test for the filter and the close rule; manual.
+### ✅ Slice T5 — Manual triage for the unsure tabs
+**Build:** `start_manual_triage(tabIds)` opens the existing one-by-one sorting screen
+for just those tabs, in the window they are in, and brings it forward. The user
+decides each tab; the tool closes and saves nothing. Tabs must be in one window;
+closed, private and TabBuddy tabs are left out and reported; pinned and playing
+tabs are included because a person, not the agent, decides. It is logged, without
+an undo.
+
+The screen (`dashboard.html?triage=<window>&tabs=1,2,3`) changed in three ways:
+- it shows only the handed-over tabs, in the order given, with a banner saying why;
+- it closes the window at the end only for a whole-window session, never for a
+  handed-over list, which would have closed tabs the user never saw;
+- a malformed `tabs=` value reads as an empty list, never as the whole window.
+
+*(Found while testing: undo on this screen broke closing. The browser gives a
+restored tab a new id, but the screen kept the old one, so closing the card again
+failed with "may already be closed", and filing it again left the restored tab
+open. Yesterday's change that made filing really close the tab exposed it for
+filed tabs; for plain closes it had been latent since the screen was written. The
+screen now takes the new id from the restored session, whether a tab or a whole
+window. Confirmed in a real browser: a restored throwaway tab changed id.)*
+
+**Test:** unit tests for the address, the parsing and the handler; render tests of
+the real screen in both modes, including that a handed-over list never closes the
+window and that undo-then-close, twice in a row, works; live with throwaway tabs.
+**Commit:** `feat(bridge): hand unsure tabs to the one-by-one sorting screen`
 
 ### 🔲 Slice T6 — The `triage_window` prompt
 **Build:** an MCP prompt that scripts the conversation: ask what the window is
