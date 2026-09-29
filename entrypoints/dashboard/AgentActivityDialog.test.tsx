@@ -130,6 +130,21 @@ describe('AgentActivityDialog', () => {
     expect(groups[1]!.textContent).toContain('Created "Reading"');
   });
 
+  it('keeps every group at its full height, so a long log scrolls instead of squashing the groups', async () => {
+    // jsdom does no layout, so this checks the class that prevents the bug. The list is a
+    // height-capped flex column and a group has overflow-hidden; without shrink-0 each group
+    // shrinks to fit and is clipped, and the list never overflows, so it never scrolls.
+    await show({
+      entries: Array.from({ length: 6 }, (_, i) => entry(`e${i}`, `Closed ${i} tabs`, { request: `request ${i}` })),
+    });
+    const list = document.body.querySelector('ul[aria-label="Agent activity"]') as HTMLElement;
+    expect(list.className).toContain('overflow-y-auto');
+    expect(list.className).toContain('max-h-96');
+    const groups = [...list.children];
+    expect(groups).toHaveLength(6);
+    for (const group of groups) expect(group.className).toContain('shrink-0');
+  });
+
   it('labels actions that came with no request, and explains why in a tooltip', async () => {
     await show({ entries: [entry('a', 'Renamed "A" to "B"', { tool: 'rename_snapshot' })] });
     const header = document.body.querySelector('p.font-semibold') as HTMLElement;

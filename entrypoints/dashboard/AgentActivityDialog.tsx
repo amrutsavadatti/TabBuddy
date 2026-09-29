@@ -59,7 +59,10 @@ export function AgentActivityDialog({
         ) : (
           <ul className="flex max-h-96 flex-col gap-3 overflow-y-auto" aria-label="Agent activity">
             {groups.map((group) => (
-              <li key={group.id} className="overflow-hidden rounded-xl border border-border">
+              // shrink-0 matters: the list is a height-capped flex column, and a flex item with
+              // overflow-hidden may shrink below its content, so without it every group is squashed
+              // and clipped and the list never overflows, which means it never scrolls.
+              <li key={group.id} className="shrink-0 overflow-hidden rounded-xl border border-border">
                 <div className="flex items-baseline justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
                   <p
                     className={`min-w-0 text-sm font-semibold ${group.request === null ? 'text-muted-foreground' : ''}`}
