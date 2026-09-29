@@ -9,7 +9,9 @@ export type Method =
   | 'getSnapshot'
   | 'listCategories'
   | 'listOpenWindows'
-  | 'searchTabs';
+  | 'searchTabs'
+  | 'getStaleTabs'
+  | 'getUsageStats';
 
 export type ErrorCode =
   | 'unknown_method'
@@ -174,4 +176,53 @@ export interface SearchTabsResult {
   total: number;
   /** True when `total` exceeds the matches returned. */
   truncated: boolean;
+}
+
+/** Most stale tabs `getStaleTabs` returns in one call. */
+export const MAX_STALE_TABS = 100;
+/** Most snapshots or sites `getUsageStats` returns per list. */
+export const MAX_USAGE_ITEMS = 20;
+
+export interface GetStaleTabsParams {
+  /** Stale means untouched this long. Defaults to the user's nudge setting. */
+  olderThanMinutes?: number;
+}
+
+export interface StaleTab {
+  windowId: number;
+  tabId: number;
+  title: string;
+  url: string;
+  lastAccessed: number;
+  minutesSinceLastUse: number;
+}
+
+export interface StaleTabsResult {
+  /** The threshold used, in minutes. */
+  olderThanMinutes: number;
+  /** Most stale first. */
+  tabs: StaleTab[];
+  /** All stale tabs found, before the cap. */
+  total: number;
+  truncated: boolean;
+  /** Old tabs that were left out, and why, so a short list can be explained. */
+  skipped: {
+    /** Belong to a snapshot's live window, so TabBuddy never nudges them. */
+    managed: number;
+    /** The user chose Keep on the page's address. */
+    snoozed: number;
+  };
+}
+
+export interface GetUsageStatsParams {
+  limit?: number;
+}
+
+export interface UsageStats {
+  /** The snapshots opened most, most first. Archived and never-opened ones are left out. */
+  topSnapshots: { id: string; name: string; usageCount: number; pinned: boolean; updatedAt: number }[];
+  /** Most visited sites by domain (no pages or URLs), most first. */
+  topSites: { domain: string; score: number }[];
+  /** False when the user has turned off Quick links; no sites are reported then. */
+  siteTrackingEnabled: boolean;
 }

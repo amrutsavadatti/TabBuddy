@@ -29,11 +29,13 @@ async function connect(send: Send) {
 const textOf = (result: any) => result.content[0].text as string;
 
 describe('tools', () => {
-  it('offers the five read-only tools', async () => {
+  it('offers the seven read-only tools', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       'get_snapshot',
+      'get_stale_tabs',
+      'get_usage_stats',
       'list_categories',
       'list_open_windows',
       'list_snapshots',
@@ -91,6 +93,40 @@ describe('tools', () => {
     const client = await connect(send);
     for (const args of [{}, { query: '' }, { query: 'a', scope: 'everywhere' }, { query: 'a', limit: 51 }]) {
       const result = await client.callTool({ name: 'search_tabs', arguments: args }).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('get_stale_tabs forwards a threshold, and sends no params without one', async () => {
+    const send = vi.fn(async () => ({ tabs: [] }));
+    const client = await connect(send);
+    await client.callTool({ name: 'get_stale_tabs', arguments: { olderThanMinutes: 90 } });
+    expect(send).toHaveBeenLastCalledWith('getStaleTabs', { olderThanMinutes: 90 });
+    await client.callTool({ name: 'get_stale_tabs', arguments: {} });
+    expect(send).toHaveBeenLastCalledWith('getStaleTabs', undefined);
+  });
+
+  it('get_usage_stats forwards a limit, and sends no params without one', async () => {
+    const send = vi.fn(async () => ({ topSnapshots: [], topSites: [], siteTrackingEnabled: true }));
+    const client = await connect(send);
+    await client.callTool({ name: 'get_usage_stats', arguments: { limit: 3 } });
+    expect(send).toHaveBeenLastCalledWith('getUsageStats', { limit: 3 });
+    await client.callTool({ name: 'get_usage_stats', arguments: {} });
+    expect(send).toHaveBeenLastCalledWith('getUsageStats', undefined);
+  });
+
+  it('rejects out-of-range stale and usage arguments without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    const attempts = [
+      { name: 'get_stale_tabs', arguments: { olderThanMinutes: 0 } },
+      { name: 'get_stale_tabs', arguments: { olderThanMinutes: -1 } },
+      { name: 'get_usage_stats', arguments: { limit: 0 } },
+      { name: 'get_usage_stats', arguments: { limit: 21 } },
+    ];
+    for (const attempt of attempts) {
+      const result = await client.callTool(attempt).catch((e) => e);
       expect(result instanceof Error || result.isError === true).toBe(true);
     }
     expect(send).not.toHaveBeenCalled();

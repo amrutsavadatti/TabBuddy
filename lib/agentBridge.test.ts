@@ -7,6 +7,8 @@ import {
   dispatch,
   parseGetSnapshotParams,
   parseSearchParams,
+  parseStaleParams,
+  parseUsageParams,
   summarizeSnapshot,
 } from './agentBridge';
 import { addCategory, setSnapshotCategories } from './categories';
@@ -352,5 +354,73 @@ describe('searchTabs', () => {
     expect(await dispatch({ id: 's', method: 'searchTabs', params: { query: '' } })).toMatchObject({
       error: { code: 'invalid_params' },
     });
+  });
+});
+
+describe('parseStaleParams and parseUsageParams', () => {
+  it('accepts no params, and a positive number of minutes', () => {
+    expect(parseStaleParams(undefined)).toEqual({ olderThanMinutes: undefined });
+    expect(parseStaleParams({ olderThanMinutes: 90 })).toEqual({ olderThanMinutes: 90 });
+  });
+
+  it.each([[{ olderThanMinutes: 0 }], [{ olderThanMinutes: -5 }], [{ olderThanMinutes: '60' }], [{ olderThanMinutes: NaN }]])(
+    'rejects %j',
+    (params) => expect(() => parseStaleParams(params)).toThrow(BridgeFailure),
+  );
+
+  it('defaults and caps the usage limit, and rejects bad ones', () => {
+    expect(parseUsageParams(undefined)).toEqual({ limit: 5 });
+    expect(parseUsageParams({ limit: 999 })).toEqual({ limit: 20 });
+    expect(() => parseUsageParams({ limit: 0 })).toThrow(BridgeFailure);
+    expect(() => parseUsageParams({ limit: 2.5 })).toThrow(BridgeFailure);
+  });
+});
+
+describe('getStaleTabs', () => {
+  it('flags old tabs using the given threshold, and leaves managed tabs out', async () => {
+    const win = (await fakeBrowser.windows.create({}))!;
+    const old = await fakeBrowser.tabs.create({ windowId: win.id, url: 'https://old.test/' });
+    const kept = await fakeBrowser.tabs.create({ windowId: win.id, url: 'https://managed.test/' });
+    const longAgo = Date.now() - 3 * 60 * 60_000;
+    for (const t of [old, kept]) (t as { lastAccessed?: number }).lastAccessed = longAgo;
+    vi.spyOn(fakeBrowser.tabs, 'query').mockResolvedValue([old, kept] as never);
+    vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([{ id: win.id, tabs: [old, kept] }] as never);
+    await setManagedTabs('snap', [kept.id!]);
+
+    const response = await dispatch({ id: 'g', method: 'getStaleTabs', params: { olderThanMinutes: 60 } });
+    const result = (response as any).result;
+    expect(result.olderThanMinutes).toBe(60);
+    expect(result.tabs.map((t: any) => t.url)).toEqual(['https://old.test/']);
+    expect(result.skipped).toEqual({ managed: 1, snoozed: 0 });
+  });
+
+  it('defaults to the nudge setting when no threshold is given', async () => {
+    await fakeBrowser.storage.local.set({ nudgeStaleMinutes: 30 });
+    vi.spyOn(fakeBrowser.windows, 'getAll').mockResolvedValue([] as never);
+    const response = await dispatch({ id: 'g', method: 'getStaleTabs' });
+    expect((response as any).result.olderThanMinutes).toBe(30);
+  });
+
+  it('answers invalid_params for a bad threshold', async () => {
+    expect(await dispatch({ id: 'g', method: 'getStaleTabs', params: { olderThanMinutes: 0 } })).toMatchObject({
+      error: { code: 'invalid_params' },
+    });
+  });
+});
+
+describe('getUsageStats', () => {
+  it('returns the top snapshots and sites, honouring Quick links being off', async () => {
+    await addSnapshot(makeSnapshot({ name: 'Often', usageCount: 9 }));
+    await fakeBrowser.storage.local.set({
+      siteStats: { 'github.com': { score: 4, lastVisitAt: Date.now(), hidden: false } },
+    });
+    const on = (await dispatch({ id: 'u', method: 'getUsageStats' })) as any;
+    expect(on.result.topSnapshots.map((s: any) => s.name)).toEqual(['Often']);
+    expect(on.result.topSites.map((s: any) => s.domain)).toEqual(['github.com']);
+
+    await fakeBrowser.storage.local.set({ quickLinksEnabled: false });
+    const off = (await dispatch({ id: 'u', method: 'getUsageStats' })) as any;
+    expect(off.result.topSites).toEqual([]);
+    expect(off.result.siteTrackingEnabled).toBe(false);
   });
 });

@@ -4,6 +4,8 @@ import { z } from 'zod';
 import {
   MAX_OPEN_TABS,
   MAX_SEARCH_RESULTS,
+  MAX_STALE_TABS,
+  MAX_USAGE_ITEMS,
   MAX_SNAPSHOT_TABS_PER_CALL,
   PROTOCOL_VERSION,
   type HelloResult,
@@ -155,6 +157,56 @@ export function createServer(send: Send): McpServer {
       annotations: { readOnlyHint: true },
     },
     ({ query, scope, limit }) => runTool(send, 'searchTabs', { query, scope, limit }),
+  );
+
+  server.registerTool(
+    'get_stale_tabs',
+    {
+      title: 'Find stale open tabs',
+      description:
+        'List open tabs the user has left untouched for a long time, the most stale first: candidates ' +
+        'for cleanup. It applies the same rules as TabBuddy\'s own "tab hoarder" nudges: pinned tabs, tabs ' +
+        "playing sound, tabs that belong to a snapshot's live window, and tabs the user chose to Keep are " +
+        'never listed. Each tab has its windowId, tabId, title, url and minutesSinceLastUse. By default ' +
+        'a tab is stale after the time the user set in TabBuddy\'s settings; pass olderThanMinutes to ' +
+        'override. "skipped" counts old tabs that were left out because they belong to a snapshot or ' +
+        'were kept, so you can explain a short list. This only finds tabs; it never closes anything, and ' +
+        `you should ask the user before doing so. At most ${MAX_STALE_TABS} tabs are returned. Read-only.`,
+      inputSchema: {
+        olderThanMinutes: z
+          .number()
+          .positive()
+          .optional()
+          .describe("Stale means untouched this many minutes. Default: the user's own setting."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    ({ olderThanMinutes }) =>
+      runTool(send, 'getStaleTabs', olderThanMinutes === undefined ? undefined : { olderThanMinutes }),
+  );
+
+  server.registerTool(
+    'get_usage_stats',
+    {
+      title: 'What the user opens and visits most',
+      description:
+        'Show which snapshots the user opens most (with how many times) and which sites they visit most. ' +
+        'Use it to understand their habits: which workspaces matter to them, what to suggest first, or ' +
+        'which snapshots they never touch. Sites are domains only (no pages), with a relative score that ' +
+        'favours recent visits. topSites is empty and siteTrackingEnabled is false if the user turned ' +
+        'visit counting off, so do not treat an empty list as "visits nothing". Read-only.',
+      inputSchema: {
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_USAGE_ITEMS)
+          .optional()
+          .describe(`How many snapshots and sites to list. Default 5, maximum ${MAX_USAGE_ITEMS}.`),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    ({ limit }) => runTool(send, 'getUsageStats', limit === undefined ? undefined : { limit }),
   );
 
   server.registerTool(

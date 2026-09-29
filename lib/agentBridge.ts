@@ -6,6 +6,11 @@ import {
   type ErrorCode,
   type CategorySummary,
   type GetSnapshotParams,
+  type GetStaleTabsParams,
+  type GetUsageStatsParams,
+  type StaleTabsResult,
+  type UsageStats,
+  MAX_USAGE_ITEMS,
   type HelloResult,
   type ListSnapshotsParams,
   type OpenWindowsResult,
@@ -22,7 +27,13 @@ import { getCategories, getSnapshotsInCategory } from './categories';
 import { resolveLazyTab } from './lazyTab';
 import { getManagedTabIds } from './managedTabs';
 import { shapeOpenWindows } from './openWindows';
+import { getNudgeStaleMinutes } from './nudgeSettings';
+import { getSnoozedKeys } from './nudgeState';
+import { getQuickLinksEnabled } from './quickLinksSetting';
 import { queryTokens, searchTabs } from './searchTabs';
+import { getSiteStats } from './siteStats';
+import { findStaleTabs } from './staleTabs';
+import { buildUsageStats } from './usageStats';
 import { getSnapshots } from './storage';
 import type { Category, Snapshot } from './types';
 
@@ -148,6 +159,22 @@ export function parseSearchParams(params: unknown): { query: string; scope: Sear
   };
 }
 
+export function parseStaleParams(params: unknown): { olderThanMinutes: number | undefined } {
+  const { olderThanMinutes } = (params ?? {}) as GetStaleTabsParams;
+  if (olderThanMinutes !== undefined && (typeof olderThanMinutes !== 'number' || !(olderThanMinutes > 0))) {
+    throw new BridgeFailure('invalid_params', 'olderThanMinutes must be a number of minutes greater than 0.');
+  }
+  return { olderThanMinutes };
+}
+
+export function parseUsageParams(params: unknown): { limit: number } {
+  const { limit } = (params ?? {}) as GetUsageStatsParams;
+  if (limit !== undefined && (!Number.isInteger(limit) || (limit as number) < 1)) {
+    throw new BridgeFailure('invalid_params', 'limit must be a whole number, 1 or more.');
+  }
+  return { limit: Math.min(limit ?? 5, MAX_USAGE_ITEMS) };
+}
+
 export const handlers: HandlerTable = {
   hello: async (): Promise<HelloResult> => ({
     protocol: PROTOCOL_VERSION,
@@ -174,6 +201,30 @@ export const handlers: HandlerTable = {
     }));
   },
   listOpenWindows: (): Promise<OpenWindowsResult> => loadOpenWindows(),
+  getStaleTabs: async (params): Promise<StaleTabsResult> => {
+    const { olderThanMinutes } = parseStaleParams(params);
+    const now = Date.now();
+    const minutes = olderThanMinutes ?? (await getNudgeStaleMinutes());
+    const [open, snoozedKeys] = await Promise.all([
+      loadOpenWindows(Number.MAX_SAFE_INTEGER),
+      getSnoozedKeys(now),
+    ]);
+    return findStaleTabs({
+      openWindows: open.windows,
+      snoozedKeys,
+      now,
+      thresholdMs: minutes * 60_000,
+    });
+  },
+  getUsageStats: async (params): Promise<UsageStats> => {
+    const { limit } = parseUsageParams(params);
+    const [snapshots, siteStats, siteTrackingEnabled] = await Promise.all([
+      getSnapshots(),
+      getSiteStats(),
+      getQuickLinksEnabled(),
+    ]);
+    return buildUsageStats({ snapshots, siteStats, siteTrackingEnabled, now: Date.now(), count: limit });
+  },
   searchTabs: async (params): Promise<SearchTabsResult> => {
     const { query, scope, limit } = parseSearchParams(params);
     const wantsOpen = scope === 'open' || scope === 'all';
