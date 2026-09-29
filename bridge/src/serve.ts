@@ -24,6 +24,7 @@ import {
   type HelloResult,
 } from '../protocol.js';
 import { BridgeCallError, callBridge } from './client.js';
+import { registerPrompts } from './prompts.js';
 import { socketPath } from './paths.js';
 
 /** Keep in step with package.json (a test checks). */
@@ -35,7 +36,9 @@ export const SERVER_INSTRUCTIONS =
   'you for. Whenever you act on a request from the user (anything that opens, saves, renames, tags, ' +
   'archives, closes or removes), pass the same short `request` phrase, in the user\'s words, on every ' +
   'tool call for that request. Ask before closing, archiving or removing tabs unless the user has ' +
-  'already told you exactly which ones.';
+  'already told you exactly which ones. Ids are for your tool calls only: talk to the user about tabs ' +
+  'by title and snapshots by name, never by raw id. Closing, archiving and removing take two steps: ' +
+  'use a propose_ tool, show what would happen, and call confirm_proposal only after the user agrees.';
 
 export type Send = (method: string, params?: unknown) => Promise<unknown>;
 
@@ -110,7 +113,8 @@ export function createServer(send: Send): McpServer {
         '"Research") that the user can reopen with one click. Use this first to see what exists and to ' +
         "get snapshot ids. Returns each snapshot's id, name, tab count, category names, how often it has " +
         'been opened (usageCount), whether it is pinned, and whether its window is open right now. Pass ' +
-        'categoryId to list only one category (ids come from list_categories). Read-only.',
+        'categoryId to list only one category (ids come from list_categories). Ids are for your later calls: ' +
+        'tell the user snapshots by name. Read-only.',
       inputSchema: {
         categoryId: z
           .string()
@@ -150,7 +154,8 @@ export function createServer(send: Send): McpServer {
         "snapshot's live window). A tab with lazy: true is a TabBuddy placeholder that has not loaded " +
         'yet; url is the page it will open. Incognito windows and TabBuddy\'s own pages are never ' +
         `listed. At most ${MAX_OPEN_TABS} tabs are returned; "truncated" says if more were left out. ` +
-        'Read-only.',
+        'For a crowded window prefer summarize_window, which stays small. Tell the user about tabs by ' +
+        'title, never by id. Read-only.',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -171,7 +176,8 @@ export function createServer(send: Send): McpServer {
         'or archived match has snapshotId, snapshotName and the tab index (as get_snapshot shows it); ' +
         `an open match has windowId and tabId. scope limits the search; the default is all. At most ` +
         `${MAX_SEARCH_RESULTS} matches are returned; total and truncated say if there were more, in ` +
-        'which case use more specific keywords. Read-only.',
+        'which case use more specific keywords. Tell the user about matches by title, never by id or ' +
+        'index. Read-only.',
       inputSchema: {
         query: z.string().min(1).describe('Keywords to look for, e.g. "vector database pricing".'),
         scope: z
@@ -819,6 +825,8 @@ export function createServer(send: Send): McpServer {
     },
     ({ id, offset, limit }) => runTool(send, 'getSnapshot', { id, offset, limit }),
   );
+
+  registerPrompts(server);
 
   return server;
 }

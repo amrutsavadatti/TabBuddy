@@ -642,11 +642,16 @@ the real screen in both modes, including that a handed-over list never closes th
 window and that undo-then-close, twice in a row, works; live with throwaway tabs.
 **Commit:** `feat(bridge): hand unsure tabs to the one-by-one sorting screen`
 
-### 🔲 Slice T6 — The `triage_window` prompt
+### ✅ Slice T6 — The `triage_window` prompt
 **Build:** an MCP prompt that scripts the conversation: ask what the window is
 for, propose by cluster, ask once, act. It asks once for the agent's own
 recommendations and does not re-ask when the user named the tabs, and it always
-asks for large batches.
+asks for large batches (more than 10 tabs). Optional arguments: `windowId` (a
+malformed one falls back to the window used last) and `purpose` (skips the
+"what is it for?" question). Prompts live in `bridge/src/prompts.ts`.
+*(Found while testing: the SDK rejects a prompt that has arguments if the client
+sends no `arguments` object at all; clients that list the arguments send one.)*
+**Commit:** `feat(bridge): add MCP prompts and tune tool descriptions` (shared with S2)
 
 ---
 
@@ -796,13 +801,19 @@ asks for large batches.
 
 **Commit:** `feat(bridge): add the Agent bridge settings section`
 
-### 🔲 Slice S2 — MCP prompts and tool-description pass
+### ✅ Slice S2 — MCP prompts and tool-description pass
 **Build:**
 - The `clean_up_browser`, `switch_to` and `what_was_i_doing` prompts.
 - A review of every tool description:
   - Say when to use each tool.
   - Remind the agent to always propose before destructive actions.
   - Don't dump raw ids to the user.
+
+*(Done: the four prompts, and the server instructions plus the search, list and
+open-window descriptions now say to talk about tabs by title and snapshots by
+name, and that closing takes a propose step first. Unit tests cover the prompt
+list, arguments and scripts. Still to do by hand: run each as a slash command on
+a messy real profile and adjust the wording.)*
 
 **Test:** Manual in Claude Code:
 - Run each prompt as a slash command on a messy real profile.
@@ -849,7 +860,7 @@ passes, and `ping` and `list_snapshots` work.
 | ✅ **M3 — Workspace switching** | W1–W3 | "Open Job Hunt", "save this as Research" |
 | ✅ **M3b — Triage assistant, reading and filing** | T1–T3 | "Summarise this window and recommend a cleanup"; file tabs into new or existing snapshots (closing is still manual) |
 | **M4 — Safe cleanup** | X1–X3 | "Clean up my browser" with approval and undo |
-| **M4b — Agentic triage** | T4–T6 | The full loop: recommend, user decides, one confirmation, unsure tabs go to manual triage |
+| ✅ **M4b — Agentic triage** | T4–T6 | The full loop: recommend, user decides, one confirmation, unsure tabs go to manual triage |
 | **M5 — Release** | X4, S1–S4 | A one-command install for other users |
 
 ## Notes from building
