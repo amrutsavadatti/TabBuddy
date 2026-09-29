@@ -8,6 +8,7 @@ import {
   EyeOff,
   HelpCircle,
   Leaf,
+  Bot,
   Link2,
   SlidersHorizontal,
   Upload,
@@ -124,6 +125,8 @@ export function SettingsBar({
   onToggleHoverPeek,
   lazyRestoreEnabled,
   onToggleLazyRestore,
+  agentBridgeEnabled,
+  onToggleAgentBridge,
   nudgeEnabled,
   nudgeIntervalMinutes,
   onOpenNudgeSettings,
@@ -143,6 +146,8 @@ export function SettingsBar({
   onToggleHoverPeek: () => void;
   lazyRestoreEnabled: boolean;
   onToggleLazyRestore: () => void;
+  agentBridgeEnabled: boolean;
+  onToggleAgentBridge: () => void;
   nudgeEnabled: boolean;
   nudgeIntervalMinutes: number;
   onOpenNudgeSettings: () => void;
@@ -233,6 +238,14 @@ export function SettingsBar({
             tone="amber"
             title="Tab nudges: how often, and how old is stale"
             onClick={onOpenNudgeSettings}
+          />
+          <Chip
+            icon={<Bot size={15} />}
+            label="Agent bridge"
+            state={agentBridgeEnabled ? 'On' : 'Off'}
+            active={agentBridgeEnabled}
+            title="Let an AI agent (through the tabbuddy-bridge MCP server) use TabBuddy. Off by default"
+            onClick={onToggleAgentBridge}
           />
           </GroupPanel>
 

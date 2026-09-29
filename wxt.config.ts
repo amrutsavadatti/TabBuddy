@@ -19,6 +19,8 @@ export default defineConfig({
       'alarms',
       'idle',
     ],
+    // Requested only when the user turns on the agent bridge.
+    optional_permissions: ['nativeMessaging'],
     commands: {
       'open-dashboard': {
         suggested_key: {

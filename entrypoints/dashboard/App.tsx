@@ -92,6 +92,11 @@ import {
 } from '@/lib/siteStats';
 import { getQuickLinksEnabled, setQuickLinksEnabled } from '@/lib/quickLinksSetting';
 import {
+  enableAgentBridge,
+  getAgentBridgeEnabled,
+  setAgentBridgeEnabled,
+} from '@/lib/agentBridgeSettings';
+import {
   chosenDomains,
   getQuickLinkSlots,
   isDomainInOtherSlot,
@@ -793,6 +798,7 @@ function App() {
   const [hoverPeekEnabled, setHoverPeekEnabledState] = useState(true);
   const [lazyRestoreEnabled, setLazyRestoreEnabledState] = useState(true);
   const [quickLinksEnabled, setQuickLinksEnabledState] = useState(true);
+  const [agentBridgeEnabled, setAgentBridgeEnabledState] = useState(false);
   const [nudgeEnabled, setNudgeEnabledState] = useState(true);
   const [nudgeIntervalMinutes, setNudgeIntervalMinutesState] = useState(
     DEFAULT_NUDGE_INTERVAL_MINUTES,
@@ -832,6 +838,7 @@ function App() {
     getDashboardView().then(setView);
     getLazyRestoreEnabled().then(setLazyRestoreEnabledState);
     getQuickLinksEnabled().then(setQuickLinksEnabledState);
+    getAgentBridgeEnabled().then(setAgentBridgeEnabledState);
     getNudgeEnabled().then(setNudgeEnabledState);
     getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
     getNudgeStaleMinutes().then(setNudgeStaleMinutesState);
@@ -860,6 +867,7 @@ function App() {
         getHoverPeekEnabled().then(setHoverPeekEnabledState);
         getLazyRestoreEnabled().then(setLazyRestoreEnabledState);
         getQuickLinksEnabled().then(setQuickLinksEnabledState);
+        getAgentBridgeEnabled().then(setAgentBridgeEnabledState);
         getNudgeEnabled().then(setNudgeEnabledState);
         getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
         getNudgeStaleMinutes().then(setNudgeStaleMinutesState);
@@ -897,6 +905,18 @@ function App() {
       setQuickLinksEnabled(next);
       return next;
     });
+  };
+
+  // Temporary control (Slice P2); the real Agent bridge section is Slice S1.
+  const toggleAgentBridge = () => {
+    if (agentBridgeEnabled) {
+      setAgentBridgeEnabled(false);
+    } else {
+      // Straight from the click: the permission prompt needs a user gesture.
+      enableAgentBridge().then((granted) => {
+        if (!granted) showToast('Agent bridge needs the native messaging permission');
+      });
+    }
   };
 
   const handleHideSite = async (domain: string) => {
@@ -1369,6 +1389,8 @@ function App() {
         onToggleHoverPeek={toggleHoverPeek}
         lazyRestoreEnabled={lazyRestoreEnabled}
         onToggleLazyRestore={toggleLazyRestore}
+        agentBridgeEnabled={agentBridgeEnabled}
+        onToggleAgentBridge={toggleAgentBridge}
         nudgeEnabled={nudgeEnabled}
         nudgeIntervalMinutes={nudgeIntervalMinutes}
         onOpenNudgeSettings={() => setNudgeDialogOpen(true)}

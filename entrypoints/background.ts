@@ -15,10 +15,12 @@ import {
 import { ensureNudgeAlarm, NUDGE_ALARM_NAME } from '@/lib/nudgeAlarm';
 import { AWAY_AFTER_SECONDS, checkNudgeGate, noteReturnedFromAway } from '@/lib/nudgeGate';
 import { closeNudgesFor, openNextNudge } from '@/lib/nudgeWindow';
+import { startAgentBridge } from '@/lib/agentBridgeConnection';
 
 export default defineBackground(() => {
   ensureArchivedSnapshotExists();
   updatePlayingBadge().catch(() => {});
+  startAgentBridge();
 
   // Browser launch resets window/tab ids; an extension reload/update keeps
   // them but empties the session registry.

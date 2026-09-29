@@ -22,6 +22,10 @@ describe('interpretStorageChange', () => {
     expect(result?.settings).toBe(false);
   });
 
+  it('flags the agent bridge setting as a settings change', () => {
+    expect(interpretStorageChange({ agentBridgeEnabled: { newValue: true } }, 'local')?.settings).toBe(true);
+  });
+
   it('treats a removed snapshots key as an empty list', () => {
     expect(interpretStorageChange({ snapshots: {} }, 'local')?.snapshots).toEqual([]);
   });

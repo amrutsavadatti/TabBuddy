@@ -1,3 +1,4 @@
+import { AGENT_BRIDGE_ENABLED_KEY } from './agentBridgeSettings';
 import { CATEGORIES_KEY } from './categories';
 import { LAZY_RESTORE_KEY } from './lazyRestore';
 import { NUDGE_ENABLED_KEY, NUDGE_INTERVAL_KEY, NUDGE_STALE_KEY } from './nudgeSettings';
@@ -15,6 +16,7 @@ const SETTINGS_KEYS = [
   NUDGE_INTERVAL_KEY,
   NUDGE_STALE_KEY,
   QUICK_LINKS_ENABLED_KEY,
+  AGENT_BRIDGE_ENABLED_KEY,
 ];
 
 export interface LiveChange {
