@@ -614,14 +614,58 @@ export function createServer(send: Send): McpServer {
         'ids. proposal_expired means the proposal timed out or was already used. On success it says how ' +
         'many tabs were archived, closed or removed. Archived tabs are then in the reserved Archived ' +
         'snapshot (find them with search_tabs, scope archived), and the user can reopen them from it in ' +
-        'the TabBuddy dashboard. Closed tabs are not saved anywhere, and removed saved tabs are gone. ' +
-        'There is no undo tool yet.',
+        'the TabBuddy dashboard. Closed tabs are not saved anywhere, and removed saved tabs are gone, ' +
+        'but the result includes an undoId: tell the user the action can be undone, and call undo with ' +
+        'it if they ask.',
       inputSchema: {
         proposalId: z.string().min(1).describe('The proposalId returned by a propose_ tool.'),
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
     ({ proposalId }) => runTool(send, 'confirmProposal', { proposalId }),
+  );
+
+  server.registerTool(
+    'get_agent_activity',
+    {
+      title: 'What the agent has done',
+      description:
+        "List what has been done to the user's browser and snapshots through TabBuddy, newest first: " +
+        'opened, saved, created, renamed, tagged, added to, archived, closed, removed and undone. Each ' +
+        'entry has an id, a time (ms since epoch), the tool that did it, a one-sentence summary, and ' +
+        'whether it can still be undone (only archiving, closing and removing saved tabs can be, and ' +
+        'only the 20 most recent such actions). Use it when the user asks what you did, or to find an ' +
+        'undoId (the id of an undoable entry). Shows 20 entries by default and at most 100. Read-only.',
+      inputSchema: {
+        limit: z.number().int().min(1).max(100).optional().describe('How many entries to list. Default 20.'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    ({ limit }) => runTool(send, 'getAgentActivity', limit === undefined ? undefined : { limit }),
+  );
+
+  server.registerTool(
+    'undo',
+    {
+      title: 'Undo an archive, close or removal',
+      description:
+        'Reverse one earlier archive, close or removal of saved tabs, using the undoId from ' +
+        'confirm_proposal or the id of an undoable entry from get_agent_activity. Archive: reopens the ' +
+        'tabs and takes them back out of the Archived snapshot. Close: reopens the tabs. Remove from a ' +
+        'snapshot: puts the saved tabs back at their original positions (snapshotChangedSince says if the ' +
+        'snapshot changed meanwhile, so positions may differ). A closed tab the browser still remembers ' +
+        '(its last 25) is restored with its history and scroll position; any other opens fresh from its ' +
+        'saved address, and "reopen" in the result counts each kind, plus any that could not come back. ' +
+        'Each entry can be undone once. If nothing can be reopened, nothing is changed and the entry stays ' +
+        'undoable, so it can be tried again. Use it when the user says they did not mean it or wants ' +
+        'the tabs back. Tell them what came back, and that a tab opened fresh will not have its scroll ' +
+        'position or anything typed into a form.',
+      inputSchema: {
+        undoId: z.string().min(1).describe('The undoId from confirm_proposal, or an id from get_agent_activity.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    ({ undoId }) => runTool(send, 'undo', { undoId }),
   );
 
   server.registerTool(

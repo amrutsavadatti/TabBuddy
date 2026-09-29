@@ -118,7 +118,7 @@ describe('confirming a close proposal', () => {
 
     const result = (await confirmProposal({ proposalId })) as ConfirmCloseResult;
 
-    expect(result).toEqual({ action: 'close', closed: 2 });
+    expect(result).toEqual({ action: 'close', undoId: expect.any(String), closed: 2 });
     expect(remove.mock.calls.map(([id]) => id)).toEqual([1, 2]);
     expect(await getSnapshots()).toEqual([]); // no Archived snapshot was even created
   });
@@ -284,6 +284,7 @@ describe('confirming a removal from a snapshot', () => {
 
     expect(result).toEqual({
       action: 'removeFromSnapshot',
+      undoId: expect.any(String),
       removed: 2,
       snapshot: { id: snapshot.id, name: 'Reading', tabCount: 3 },
     });
@@ -358,7 +359,7 @@ describe('through the dispatcher', () => {
       method: 'confirmProposal',
       params: { proposalId: proposal.result.proposalId },
     })) as any;
-    expect(done.result).toEqual({ action: 'close', closed: 1 });
+    expect(done.result).toEqual({ action: 'close', undoId: expect.any(String), closed: 1 });
   });
 
   it('removes saved tabs: propose, then confirm', async () => {

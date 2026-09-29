@@ -21,12 +21,14 @@ import {
   type SearchScope,
   type SearchTabsParams,
   type SearchTabsResult,
+  MAX_ACTIVITY_ENTRIES,
   MAX_SEARCH_RESULTS,
   type SnapshotDetail,
   type SnapshotSummary,
   MAX_SNAPSHOT_TABS_PER_CALL,
   MAX_TITLE_LENGTH,
 } from '../bridge/protocol';
+import { listActivity, recordActivity } from './activityLog';
 import { focusTab, openUrls, parseOpenUrlsParams, parseTabId } from './agentOpen';
 import {
   confirmProposal,
@@ -55,6 +57,7 @@ import { queryTokens, searchTabs } from './searchTabs';
 import { getSiteStats } from './siteStats';
 import { findStaleTabs } from './staleTabs';
 import { buildUsageStats } from './usageStats';
+import { undoActivity } from './undo';
 import { summarizeWindow } from './windowSummary';
 import { restoreSnapshot } from './restore';
 import { getSnapshots } from './storage';
@@ -199,7 +202,7 @@ export function parseWindowIdParam(params: unknown): { windowId: number | undefi
   return { windowId: windowId as number | undefined };
 }
 
-export const handlers: HandlerTable = {
+const rawHandlers: HandlerTable = {
   hello: async (): Promise<HelloResult> => ({
     protocol: PROTOCOL_VERSION,
     extensionVersion: browser.runtime.getManifest().version,
@@ -281,6 +284,14 @@ export const handlers: HandlerTable = {
   updateSnapshotFromWindow: (params) => updateSnapshotFromWindow(params),
   renameSnapshot: (params) => renameSnapshotTo(params),
   tagSnapshots: (params) => tagSnapshots(params),
+  undo: (params) => undoActivity((params as { undoId?: unknown } | undefined)?.undoId),
+  getAgentActivity: async (params) => {
+    const { limit } = (params ?? {}) as { limit?: unknown };
+    if (limit !== undefined && (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1)) {
+      throw new BridgeFailure('invalid_params', 'limit must be a whole number, 1 or more.');
+    }
+    return listActivity(Math.min((limit as number | undefined) ?? 20, MAX_ACTIVITY_ENTRIES));
+  },
   openUrls: async (params): Promise<OpenUrlsResult> => {
     const { urls, newWindow } = parseOpenUrlsParams(params);
     const snapshotWindowIds = new Set(
@@ -334,6 +345,80 @@ export const handlers: HandlerTable = {
     return describeSnapshot(snapshot, { offset, limit }, categories);
   },
 };
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** The tools that change something, and the one sentence each writes to the
+ * activity log. A null summary means nothing changed, so no entry. Not here:
+ * focus_tab (switching tabs is noise), the read tools, the propose_ tools (they
+ * change nothing), and confirm_proposal, which logs itself because its entry
+ * carries the data undo needs. */
+const ACTIVITY: Record<string, { tool: string; summary: (result: any) => string | null }> = {
+  restoreSnapshot: {
+    tool: 'restore_snapshot',
+    summary: (r) =>
+      r.reusedExistingWindow
+        ? `Brought "${r.snapshotName}" to the front`
+        : `Opened "${r.snapshotName}" (${plural(r.tabCount, 'tab', 'tabs')})`,
+  },
+  openUrls: {
+    tool: 'open_urls',
+    summary: (r) =>
+      `Opened ${plural(r.tabs.length, 'page', 'pages')} ${r.openedInNewWindow ? 'in a new window' : 'in the current window'}`,
+  },
+  saveWindow: {
+    tool: 'save_window',
+    summary: (r) => `Saved a window as "${r.name}" (${plural(r.tabCount, 'tab', 'tabs')})`,
+  },
+  createSnapshotFromUrls: {
+    tool: 'create_snapshot_from_urls',
+    summary: (r) => `Created "${r.name}" from ${plural(r.tabCount, 'link', 'links')}`,
+  },
+  updateSnapshotFromWindow: {
+    tool: 'update_snapshot_from_window',
+    summary: (r) => `Updated "${r.name}" from its window (${r.previousTabCount} → ${r.tabCount} tabs)`,
+  },
+  renameSnapshot: {
+    tool: 'rename_snapshot',
+    summary: (r) => `Renamed "${r.previousName}" to "${r.name}"`,
+  },
+  tagSnapshots: {
+    tool: 'tag_snapshots',
+    summary: (r) =>
+      `Tagged ${plural(r.tagged, 'snapshot', 'snapshots')} with ${r.categories.map((c: { name: string }) => c.name).join(', ')}`,
+  },
+  addTabsToSnapshot: {
+    tool: 'add_tabs_to_snapshot',
+    summary: (r) =>
+      r.added.length === 0 ? null : `Added ${plural(r.added.length, 'tab', 'tabs')} to "${r.name}"`,
+  },
+};
+
+/** Wraps the state-changing handlers so each successful call is logged. The
+ * action has already happened by then, so a failure to log it is swallowed. */
+function withActivityLog(table: HandlerTable): HandlerTable {
+  return Object.fromEntries(
+    Object.entries(table).map(([method, handler]): [string, Handler] => {
+      const spec = ACTIVITY[method];
+      if (!spec) return [method, handler];
+      return [
+        method,
+        async (params) => {
+          const result = await handler(params);
+          try {
+            const summary = spec.summary(result);
+            if (summary !== null) await recordActivity({ tool: spec.tool, summary });
+          } catch {
+            // never let the log turn a success into a failure
+          }
+          return result;
+        },
+      ];
+    }),
+  );
+}
+
+export const handlers: HandlerTable = withActivityLog(rawHandlers);
 
 /** Routes one request to its handler. Never throws: failures become error
  * responses so the bridge always has something to send back. */

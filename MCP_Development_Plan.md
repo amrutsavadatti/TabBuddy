@@ -666,27 +666,50 @@ asks for large batches.
 
 **Commit:** `feat(bridge): close tabs and edit snapshots through proposals`
 
-### 🔲 Slice X3 — Activity log and undo
+### ✅ Slice X3a — Activity log and undo (backend)
 **Build:**
-- An activity log in storage (last 100 entries), written by every write
-  tool.
+- An activity log in storage: the newest 100 entries, one sentence each, written
+  by every tool that changes something (not `focus_tab`, the reads or the
+  `propose_` tools; adding nothing new to a snapshot is not logged either). The
+  data needed to undo is kept only for the 20 most recent undoable entries, so
+  the log cannot crowd out the user's snapshots.
 - `confirm_proposal` returns an `undoId`.
-- An `undo` tool that reverses the action:
-  - Archive → reopen the tabs and remove them from the Archived snapshot.
+- An `undo` tool, once per entry:
+  - Archive → reopen the tabs, and remove only the entries it added from the
+    Archived snapshot, only for tabs that really came back.
   - Close → reopen the tabs.
-  - Remove → put the tabs back at their original indexes.
-- A dashboard "Agent activity" panel with an Undo button on each entry that
-  can be undone.
+  - Remove → put the saved tabs back at their original positions, clamped if
+    the snapshot has since shrunk, with `snapshotChangedSince` in the result.
+- Tabs are brought back through the browser's recently-closed list where it
+  still remembers them (history and scroll position kept, closed windows
+  restored whole); anything else opens fresh from its saved address, and the
+  result counts each kind.
+- A `get_agent_activity` read tool, so the agent can say what it did and find
+  an `undoId`.
 
 **Test:**
-- Unit tests for the log (cap, order) and for each undo step, run against
-  stored data.
-- Manual:
-  - Archive 5 tabs through the agent, then undo from the dashboard.
-  - The tabs reopen and the Archived snapshot is back to its earlier state.
-  - Undo through the agent as well.
+- Unit tests for the log (cap, order, undo-data allowance), the reopening logic
+  and each undo step; manual against a real browser with throwaway tabs.
 
-**Commit:** `feat(bridge): log agent actions and support undo`
+**Commit:** `feat(bridge): log agent activity and undo confirmed actions`
+
+### 🔲 Slice X3b — Dashboard: the Agent activity panel and toasts
+**Build:**
+- An "Agent activity" panel in the dashboard listing the log, newest first,
+  with an Undo button on each entry that can still be undone. Undo runs in the
+  dashboard itself, through the same code the `undo` tool uses.
+- A toast for each new log entry ("Agent archived 12 tabs"), using the existing
+  toast queue: the dashboard watches the log in storage. *(Moved here from X1:
+  the toast queue lives in the dashboard page, which the background cannot
+  call.)*
+- The panel is reached from a temporary chip in the settings bar; slice S1
+  gives it its proper place in the Agent bridge section.
+
+**Test:**
+- Unit tests for turning log changes into toasts and for the panel's state;
+  manual: archive tabs through the agent, see the toast, undo from the panel.
+
+**Commit:** `feat(bridge): show agent activity in the dashboard with undo`
 
 ### 🔲 Slice X4 — Optional confirmation in the browser
 **Build:**

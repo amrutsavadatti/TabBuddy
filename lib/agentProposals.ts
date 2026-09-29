@@ -8,6 +8,7 @@ import {
   type ProposeRemoveFromSnapshotParams,
   type SnapshotEditProposalResult,
 } from '../bridge/protocol';
+import { recordActivity, slimTab, type ClosedTab, type UndoPayload } from './activityLog';
 import { archiveTabs } from './archive';
 import { BridgeFailure } from './bridgeFailure';
 import { resolveLazyTab } from './lazyTab';
@@ -18,6 +19,28 @@ import { getSnapshots, updateSnapshot } from './storage';
 import type { TriageTab } from './triage';
 
 const NOT_OPEN = 'no open tab with that id (it may have been closed)';
+
+/** A tab that passed the re-check, with what undo will need later. */
+type LiveTab = TriageTab & { rawUrl: string; windowId: number };
+
+/** Writes the activity entry for a confirmed action. The action has already
+ * happened, so a failure to log it must not turn into a failure to report it:
+ * undoId is then null. */
+async function record(summary: string, undo: UndoPayload): Promise<string | null> {
+  try {
+    return await recordActivity({ tool: 'confirm_proposal', summary, undo });
+  } catch {
+    return null;
+  }
+}
+
+const asClosed = (tab: LiveTab): ClosedTab => ({
+  url: tab.url,
+  rawUrl: tab.rawUrl,
+  title: tab.title,
+  pinned: tab.pinned ?? false,
+  windowId: tab.windowId,
+});
 
 function truncateTitle(title: string): string {
   return title.length > MAX_TITLE_LENGTH ? `${title.slice(0, MAX_TITLE_LENGTH - 1)}…` : title;
@@ -222,10 +245,10 @@ export async function proposeRemoveFromSnapshot(params: unknown): Promise<Snapsh
 /** Checks every proposed tab against what is open now, and returns the live
  * tabs. If any is gone, shows a different page, or has become one that must be
  * left alone, throws tabs_changed, and nothing has been touched. */
-async function recheckTabs(proposal: TabProposal): Promise<TriageTab[]> {
+async function recheckTabs(proposal: TabProposal): Promise<LiveTab[]> {
   const managedIds = await getManagedTabIds();
   const problems: string[] = [];
-  const live: TriageTab[] = [];
+  const live: LiveTab[] = [];
   for (const proposed of proposal.tabs) {
     const label = `"${truncateTitle(proposed.title).slice(0, 50)}"`;
     let tab;
@@ -256,6 +279,8 @@ async function recheckTabs(proposal: TabProposal): Promise<TriageTab[]> {
       title: real.title || proposed.title,
       favIconUrl: real.favIconUrl,
       pinned: tab.pinned ?? false,
+      rawUrl: tab.url ?? '',
+      windowId: proposed.windowId,
     });
   }
 
@@ -286,11 +311,18 @@ async function confirmRemoveFromSnapshot(proposal: RemoveFromSnapshotProposal): 
     );
   }
   const drop = new Set(proposal.entries.map((e) => e.index));
+  const removed = snapshot.tabs.flatMap((tab, index) => (drop.has(index) ? [{ index, tab: slimTab(tab) }] : []));
   const remaining = snapshot.tabs.filter((_, index) => !drop.has(index));
-  await updateSnapshot(snapshot.id, { tabs: remaining, updatedAt: Date.now() });
+  const updatedAt = Date.now();
+  await updateSnapshot(snapshot.id, { tabs: remaining, updatedAt });
+  const undoId = await record(
+    `Removed ${plural(removed.length, 'saved tab', 'saved tabs')} from "${snapshot.name}"`,
+    { kind: 'removeFromSnapshot', snapshotId: snapshot.id, snapshotName: snapshot.name, snapshotUpdatedAfter: updatedAt, removed },
+  );
   return {
     action: 'removeFromSnapshot',
-    removed: snapshot.tabs.length - remaining.length,
+    undoId,
+    removed: removed.length,
     snapshot: { id: snapshot.id, name: snapshot.name, tabCount: remaining.length },
   };
 }
@@ -311,22 +343,32 @@ export async function confirmProposal(params: unknown): Promise<ConfirmProposalR
   const live = await recheckTabs(proposal);
   if (proposal.kind === 'archive') {
     const done = await archiveTabs(live);
+    const undoId = await record(`Archived ${plural(live.length, 'tab', 'tabs')}`, {
+      kind: 'archive',
+      archivedSnapshotId: done.snapshotId,
+      tabs: live.map(asClosed),
+    });
     return {
       action: 'archive',
+      undoId,
       archived: live.length,
       closed: done.closed,
       archivedSnapshot: { id: done.snapshotId, tabCount: done.snapshotTabCount },
     };
   }
 
-  let closed = 0;
+  const closedTabs: LiveTab[] = [];
   for (const tab of live) {
     try {
       await browser.tabs.remove(tab.id);
-      closed += 1;
+      closedTabs.push(tab);
     } catch {
       // already closed by the user in the meantime: fine either way
     }
   }
-  return { action: 'close', closed };
+  const undoId = await record(`Closed ${plural(closedTabs.length, 'tab', 'tabs')}`, {
+    kind: 'close',
+    tabs: closedTabs.map(asClosed),
+  });
+  return { action: 'close', undoId, closed: closedTabs.length };
 }

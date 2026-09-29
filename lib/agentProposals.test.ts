@@ -203,6 +203,7 @@ describe('confirmProposal', () => {
 
     expect(result).toEqual({
       action: 'archive',
+      undoId: expect.any(String),
       archived: 2,
       closed: 2,
       archivedSnapshot: { id: expect.any(String), tabCount: 2 },

@@ -31,6 +31,7 @@ const textOf = (result: any) => result.content[0].text as string;
 describe('tools', () => {
   const READ_ONLY = [
     'find_duplicate_tabs',
+    'get_agent_activity',
     'get_snapshot',
     'get_stale_tabs',
     'get_usage_stats',
@@ -55,10 +56,11 @@ describe('tools', () => {
     'restore_snapshot',
     'save_window',
     'tag_snapshots',
+    'undo',
     'update_snapshot_from_window',
   ];
 
-  it('offers twelve read-only tools and ten that change things', async () => {
+  it('offers thirteen read-only tools and eleven that change things', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...READ_ONLY, ...WRITES].sort());
@@ -143,6 +145,53 @@ describe('tools', () => {
       { name: 'propose_remove_from_snapshot', arguments: { id: '', indexes: [0] } },
       { name: 'propose_remove_from_snapshot', arguments: { id: 's1', indexes: [] } },
       { name: 'propose_remove_from_snapshot', arguments: { id: 's1', indexes: [1.5] } },
+    ];
+    for (const attempt of attempts) {
+      const result = await client.callTool(attempt).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('tells the model an action can be undone, and what undo does', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const description = (name: string) => tools.find((t) => t.name === name)!.description!;
+
+    const confirm = description('confirm_proposal');
+    expect(confirm).toContain('undoId');
+    expect(confirm).not.toContain('no undo tool');
+
+    const undo = description('undo');
+    for (const phrase of ['Archive:', 'Close:', 'Remove from a snapshot', 'once', 'stays undoable', 'scroll']) {
+      expect(undo).toContain(phrase);
+    }
+    expect(tools.find((t) => t.name === 'undo')!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    expect(description('get_agent_activity')).toContain('undoId');
+    expect(tools.find((t) => t.name === 'get_agent_activity')!.annotations?.readOnlyHint).toBe(true);
+  });
+
+  it('forwards undo and activity arguments, and sends no params for a plain activity listing', async () => {
+    const send = vi.fn(async () => ({ ok: true }));
+    const client = await connect(send);
+    await client.callTool({ name: 'undo', arguments: { undoId: 'abc' } });
+    expect(send).toHaveBeenLastCalledWith('undo', { undoId: 'abc' });
+    await client.callTool({ name: 'get_agent_activity', arguments: { limit: 5 } });
+    expect(send).toHaveBeenLastCalledWith('getAgentActivity', { limit: 5 });
+    await client.callTool({ name: 'get_agent_activity', arguments: {} });
+    expect(send).toHaveBeenLastCalledWith('getAgentActivity', undefined);
+  });
+
+  it('rejects malformed undo and activity arguments without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    const attempts = [
+      { name: 'undo', arguments: {} },
+      { name: 'undo', arguments: { undoId: '' } },
+      { name: 'undo', arguments: { undoId: 5 } },
+      { name: 'get_agent_activity', arguments: { limit: 0 } },
+      { name: 'get_agent_activity', arguments: { limit: 101 } },
+      { name: 'get_agent_activity', arguments: { limit: 1.5 } },
     ];
     for (const attempt of attempts) {
       const result = await client.callTool(attempt).catch((e) => e);

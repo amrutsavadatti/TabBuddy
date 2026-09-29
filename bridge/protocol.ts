@@ -26,7 +26,9 @@ export type Method =
   | 'proposeArchiveTabs'
   | 'proposeCloseTabs'
   | 'proposeRemoveFromSnapshot'
-  | 'confirmProposal';
+  | 'confirmProposal'
+  | 'undo'
+  | 'getAgentActivity';
 
 export type ErrorCode =
   | 'unknown_method'
@@ -523,6 +525,8 @@ export interface ConfirmProposalParams {
 
 export interface ConfirmArchiveResult {
   action: 'archive';
+  /** Pass this to the undo tool to reverse the action; null if it could not be recorded. */
+  undoId: string | null;
   /** Tabs saved to the Archived snapshot. */
   archived: number;
   /** Tabs actually closed (a tab the user already closed doesn't count). */
@@ -532,6 +536,7 @@ export interface ConfirmArchiveResult {
 
 export interface ConfirmCloseResult {
   action: 'close';
+  undoId: string | null;
   /** Tabs actually closed (a tab the user already closed doesn't count). */
   closed: number;
 }
@@ -559,6 +564,7 @@ export interface SnapshotEditProposalResult {
 
 export interface ConfirmRemoveFromSnapshotResult {
   action: 'removeFromSnapshot';
+  undoId: string | null;
   removed: number;
   snapshot: { id: string; name: string; tabCount: number };
 }
@@ -567,3 +573,60 @@ export type ConfirmProposalResult =
   | ConfirmArchiveResult
   | ConfirmCloseResult
   | ConfirmRemoveFromSnapshotResult;
+
+/** The activity log keeps this many entries. */
+export const MAX_ACTIVITY_ENTRIES = 100;
+/** Only this many of the most recent undoable actions keep what undo needs. */
+export const MAX_UNDOABLE_ENTRIES = 20;
+
+export interface ActivityEntry {
+  /** Also the undoId, for an entry that can be undone. */
+  id: string;
+  /** When it happened (ms since epoch). */
+  at: number;
+  /** The tool that did it, e.g. "confirm_proposal". */
+  tool: string;
+  /** One sentence for the user. */
+  summary: string;
+  /** True if the undo tool can still reverse it. */
+  undoable: boolean;
+  /** True once it has been undone. */
+  undone: boolean;
+}
+
+export interface GetAgentActivityParams {
+  limit?: number;
+}
+
+export interface GetAgentActivityResult {
+  /** Newest first. */
+  entries: ActivityEntry[];
+  /** How many entries the log holds. */
+  total: number;
+}
+
+export interface UndoParams {
+  undoId: string;
+}
+
+/** What happened when closed tabs were brought back. */
+export interface ReopenSummary {
+  /** Brought back by the browser's recently-closed list: history, scroll position and all. */
+  restored: number;
+  /** Opened again fresh from the saved address. */
+  reopened: number;
+  /** Could not be brought back. */
+  failed: number;
+}
+
+export type UndoResult =
+  | { action: 'undo'; undid: 'archive'; reopen: ReopenSummary; removedFromArchived: number }
+  | { action: 'undo'; undid: 'close'; reopen: ReopenSummary }
+  | {
+      action: 'undo';
+      undid: 'removeFromSnapshot';
+      restoredTabs: number;
+      snapshot: { id: string; name: string; tabCount: number };
+      /** True if the snapshot changed after the removal, so tabs may not be back in their exact original positions. */
+      snapshotChangedSince: boolean;
+    };
