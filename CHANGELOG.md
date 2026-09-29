@@ -2,6 +2,32 @@
 
 All notable changes to TabBuddy are listed here, newest first.
 
+## 1.1.0
+
+### Added
+- **Agent bridge (optional, off by default).** Let an AI agent that speaks the
+  Model Context Protocol, such as Claude Code, use TabBuddy: open a snapshot by
+  name, search what you've saved and archived, save a window or a list of links
+  as a snapshot, rename and tag, and look over a crowded window and suggest a
+  cleanup. It needs a small helper installed with
+  `npm install -g tabbuddy-bridge && tabbuddy-bridge install`, and talks only to
+  your own computer. See the README and the User Guide.
+- **You stay in control.** Closing, archiving and removing saved tabs always
+  take two steps (the agent proposes, you agree), can be undone, and are listed
+  in **Agent activity**. An optional **Ask me in the browser first** setting opens a
+  window that lists exactly what would happen and waits for your click.
+- **Agent bridge settings.** Gear, then Automation, then Agent bridge: the
+  on/off switch, a live status (Off, Connecting, Connected, Bridge not installed,
+  Error) with **Check again**, the commands to copy, and a link to the activity list.
+- **Ready-made agent prompts:** `triage_window`, `clean_up_browser`, `switch_to`
+  and `what_was_i_doing`.
+- **An "Agent bridge" step in the welcome tour.**
+
+### Changed
+- TabBuddy now declares one **optional** permission, `nativeMessaging`. It is
+  requested only when you turn the agent bridge on; if you never do, nothing
+  changes.
+
 ## 1.0.4
 
 ### Added

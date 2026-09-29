@@ -158,7 +158,9 @@ pinned-tab state), `groupId` (reference to a TabGroupMeta, if any).
   start so Firefox support is a smaller lift later (not shipped/tested in
   MVP).
 - **Permissions requested:** `tabs`, `tabGroups`, `windows`, `storage`.
-  No host permissions, no content scripts, no `<all_urls>`.
+  No host permissions, no content scripts, no `<all_urls>`. One optional
+  permission, `nativeMessaging`, is requested only if the user turns on the
+  agent bridge (see [MCP_Development_Plan.md](./MCP_Development_Plan.md)).
 - **Storage:** `chrome.storage.local` only. No network calls, no external
   services (e.g. no third-party favicon fetching).
 - **Target browsers:** Chrome, Brave, Edge, Opera, Vivaldi (Chromium
@@ -183,6 +185,10 @@ pinned-tab state), `groupId` (reference to a TabGroupMeta, if any).
 - Handling of snapshots whose saved URLs 404 or are no longer valid at
   restore time.
 - Chrome Web Store listing once stable.
+- **Agent bridge (built):** an optional, off-by-default local MCP server that
+  lets AI agents use snapshots and open tabs. Requirements, architecture and
+  the slice-by-slice build are in
+  [MCP_Development_Plan.md](./MCP_Development_Plan.md).
 
 ## 9. Milestones (suggested)
 

@@ -1,18 +1,38 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { InstallEnv } from './install.js';
+import type { InstallEnv, Registry } from './install.js';
 
-/** A throwaway "home directory" for install and doctor tests. */
-export function makeHome() {
+/** The Windows registry, in memory. */
+export function fakeRegistry(): Registry & { keys: Map<string, string> } {
+  const keys = new Map<string, string>();
+  return {
+    keys,
+    set: (key, value) => void keys.set(key, value),
+    read: (key) => keys.get(key) ?? null,
+    remove: (key) => void keys.delete(key),
+  };
+}
+
+/** A throwaway "home directory" for install and doctor tests, laid out the way
+ * the given platform does it (the code under test is told the platform, so
+ * this runs the same on any machine). */
+export function makeHome(platform: 'darwin' | 'linux' | 'win32' = 'darwin') {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tbh-'));
-  const support = path.join(home, 'Library', 'Application Support');
+  const support =
+    platform === 'darwin'
+      ? path.join(home, 'Library', 'Application Support')
+      : platform === 'linux'
+        ? path.join(home, '.config')
+        : path.join(home, 'AppData', 'Local');
+  const registry = fakeRegistry();
   const env: InstallEnv = {
     home,
     bridgeDir: path.join(home, '.tabbuddy'),
     nodePath: process.execPath,
     cliPath: path.join(home, 'cli.js'),
-    platform: 'darwin',
+    platform,
+    ...(platform === 'win32' ? { localAppData: support, registry } : {}),
   };
   fs.writeFileSync(env.cliPath, '// stand-in for the built CLI\n');
 
@@ -20,6 +40,7 @@ export function makeHome() {
     home,
     env,
     support,
+    registry,
     cleanup: () => fs.rmSync(home, { recursive: true, force: true }),
     /** A browser that has run (has a data dir), optionally with TabBuddy
      * loaded unpacked under the given extension id. */

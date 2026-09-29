@@ -6,7 +6,10 @@ import { BridgeCallError, BrowserUnreachableError, callBridge } from './client.j
 import { HostAlreadyRunningError, startHost } from './host.js';
 import { runDoctor } from './doctor.js';
 import {
+  BROWSER_IDS,
   install,
+  isTemporaryInstall,
+  mcpAddCommand,
   uninstall,
   UnsupportedPlatformError,
   type BrowserId,
@@ -24,8 +27,8 @@ Usage:
   tabbuddy-bridge ping              Ask the extension for its version
   tabbuddy-bridge call <method> [json]
                                     Send any request and print the result
-  tabbuddy-bridge install [--extension-id ID]... [--browser chrome|brave|edge]...
-                                    Register the host with your browsers (macOS)
+  tabbuddy-bridge install [--extension-id ID]... [--browser chrome|brave|edge|chromium]...
+                                    Register the host with your browsers (macOS, Linux, Windows)
   tabbuddy-bridge uninstall         Remove what install wrote
   tabbuddy-bridge doctor            Check the setup, stopping at the first problem
 `;
@@ -77,7 +80,7 @@ function collect(args: string[], flag: string): string[] {
 function runInstall(args: string[]): void {
   const browsers = collect(args, '--browser') as BrowserId[];
   for (const b of browsers) {
-    if (!['chrome', 'brave', 'edge'].includes(b)) throw new Error(`Unknown browser: ${b}`);
+    if (!BROWSER_IDS.includes(b)) throw new Error(`Unknown browser: ${b}`);
   }
   const report = install(installEnv(), {
     extensionIds: collect(args, '--extension-id'),
@@ -88,6 +91,7 @@ function runInstall(args: string[]): void {
   for (const outcome of report.outcomes) {
     if (outcome.status === 'written') {
       out(`✓ ${outcome.browser}: allowed ${outcome.extensionIds.join(', ')}`);
+      if (outcome.registryKey) out(`    registry: ${outcome.registryKey}`);
     } else if (outcome.status === 'not-installed') {
       out(`- ${outcome.browser}: not installed, skipped`);
     } else {
@@ -104,9 +108,15 @@ function runInstall(args: string[]): void {
   out('\nNext: restart your browser, then switch on Agent bridge in TabBuddy (Settings → Automation).');
   out('Then run `tabbuddy-bridge doctor` to check everything.');
   const env = installEnv();
-  const quote = (v: string) => `'${v.replaceAll("'", `'\\''`)}'`;
   out('\nTo give Claude Code access, run:');
-  out(`  claude mcp add tabbuddy -- ${quote(env.nodePath)} ${quote(env.cliPath)} serve`);
+  out(`  ${mcpAddCommand(env)}`);
+  if (isTemporaryInstall(env.cliPath)) {
+    out(
+      '\nWarning: this copy of the bridge lives in the npx cache, which npm cleans up from time to time, ' +
+        'and the browser would then fail to start it. For a lasting setup run:\n' +
+        '  npm install -g tabbuddy-bridge && tabbuddy-bridge install',
+    );
+  }
 }
 
 function runUninstall(): void {

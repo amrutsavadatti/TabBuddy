@@ -10,8 +10,8 @@ import {
 } from '@/components/ui/dialog';
 import type { StatusView } from '@/lib/agentBridgeStatus';
 
-export const INSTALL_COMMAND = 'npx tabbuddy-bridge install';
-export const CONNECT_COMMAND = 'claude mcp add tabbuddy -- npx tabbuddy-bridge serve';
+export const INSTALL_COMMAND = 'npm install -g tabbuddy-bridge && tabbuddy-bridge install';
+export const CONNECT_COMMAND = 'claude mcp add tabbuddy -- tabbuddy-bridge serve';
 
 const DOT: Record<StatusView['tone'], string> = {
   off: 'bg-muted-foreground/40',
@@ -127,7 +127,7 @@ export function AgentBridgeDialog({
         </div>
 
         <div className="flex flex-col gap-3">
-          <CopyLine label="1. Install the bridge (run in a terminal, then restart your browser)" command={INSTALL_COMMAND} />
+          <CopyLine label="1. Install the bridge (in a terminal), then restart your browser" command={INSTALL_COMMAND} />
           <CopyLine label="2. Connect Claude Code to it" command={CONNECT_COMMAND} />
         </div>
 

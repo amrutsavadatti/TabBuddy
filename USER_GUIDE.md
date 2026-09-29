@@ -26,6 +26,7 @@ extension day-to-day. (Looking to build or contribute instead? See
 - [Hover to peek](#hover-to-peek)
 - [Tab hoarder nudges](#tab-hoarder-nudges)
 - [Background vibes](#background-vibes)
+- [Using TabBuddy with AI agents](#using-tabbuddy-with-ai-agents)
 - [Keyboard shortcut](#keyboard-shortcut)
 - [Tips and things to know](#tips-and-things-to-know)
 
@@ -383,6 +384,93 @@ the background gradient: **Aurora**, **Sunset**, **Ocean**, or
 **Meadow** (the default). It's purely cosmetic and saved as a
 preference, so it stays your pick across sessions.
 
+## Using TabBuddy with AI agents
+
+TabBuddy can let an AI agent, such as Claude Code, work with your snapshots
+and open tabs. This is optional and **off until you turn it on**. It needs a
+small helper program, the *bridge*, that runs on your computer.
+
+### Set it up
+
+1. **Install the bridge.** In a terminal:
+
+   ```bash
+   npm install -g tabbuddy-bridge
+   tabbuddy-bridge install
+   ```
+
+   Then restart your browser. `install` finds TabBuddy in your browsers
+   (Chrome, Brave and Edge; it also knows Chromium on Linux) and registers the
+   helper with them. It works on macOS; Linux and Windows are supported in
+   the code but have not yet been tried on real machines. Load TabBuddy first:
+   `install` skips a browser that doesn't have it.
+2. **Turn it on in TabBuddy.** Open the dashboard, click the gear, choose
+   **Automation**, then **Agent bridge**. Switch the bridge on and allow the
+   permission your browser asks for. The status line shows one of **Off**,
+   **Connecting**, **Connected**, **Bridge not installed** or **Error**. If it
+   isn't connected, **Check again** retries at once, and the dialog explains
+   what is wrong.
+3. **Connect your agent.** For Claude Code, run
+   `claude mcp add tabbuddy -- tabbuddy-bridge serve` (the dialog has a copy
+   button, and `install` prints a version with full paths).
+4. **Check it.** Run `tabbuddy-bridge doctor`: it checks each step and says how
+   to fix the first problem. Then ask your agent, "what snapshots do I have?".
+
+Your browser has to be running for the agent to reach TabBuddy. If it isn't,
+the agent is told to ask you to open it.
+
+### What you can ask for
+
+- "Open my Job Hunt snapshot." It opens, or comes to the front if it's already open.
+- "Find the pricing page I archived." It searches your snapshots, the Archived
+  snapshot and your open tabs.
+- "Save this window as Research." Or: "Save the sources you found as a snapshot
+  called Vector DB research."
+- "Look over this window and suggest a cleanup." It summarises the window,
+  spots duplicates and tabs you already saved, asks what the window is for,
+  and proposes a plan: close, archive, file into a snapshot you already have,
+  or save as a new one.
+- "What was I working on?"
+
+Your agent may also offer these as slash commands (in Claude Code, type `/`):
+`triage_window`, `clean_up_browser`, `switch_to` and `what_was_i_doing`.
+
+### You stay in charge
+
+- **Closing, archiving and removing take two steps.** The agent proposes and
+  shows you the list; nothing changes until you agree.
+- **Ask me in the browser first.** In the Agent bridge dialog, turn on **Ask me
+  in the browser first**. Then, before an agent closes or archives anything,
+  TabBuddy opens a small window listing exactly what would happen, with
+  **Confirm** and **Cancel**. The agent waits up to two minutes. Cancelling,
+  closing the window, or not answering changes nothing.
+- **Undo.** Archiving, closing and removing saved tabs can be undone: the
+  agent can do it if you ask, or you can from **Agent activity**. Tabs the
+  browser still remembers come back with their history; others reopen fresh.
+- **Agent activity.** The dialog's **Agent activity** button lists what an agent
+  did, grouped by what you asked for, with an **Undo** button on entries that can
+  still be undone (the 20 most recent). Each new entry also shows a toast.
+- The agent **can't delete a whole snapshot**, and it leaves pinned tabs, tabs
+  playing sound and tabs in a snapshot's open window alone unless you name them.
+- Tabs the agent is unsure about can be handed to **Sort tabs one by one**, so
+  you decide each one.
+
+### What the agent can and can't see
+
+It can see snapshot names, tab titles and URLs, categories, your open
+windows and tabs (title, address, when you last used it, pinned, playing sound),
+how often you open each snapshot, and, if Quick links counting is on, the
+domains you visit most. It can't see what is *on* a page, and incognito tabs are
+never included. Everything travels over a private connection on your own
+computer; TabBuddy sends nothing over the network. What your agent then does with
+what it reads is governed by that agent and its provider.
+
+### Turning it off or removing it
+
+Switch **Agent bridge** off in the dialog (it disconnects at once), and run
+`tabbuddy-bridge uninstall` to remove the helper's files. If you can't
+connect, `tabbuddy-bridge doctor` is the first thing to try.
+
 ## Keyboard shortcut
 
 Press **Ctrl+Shift+K** (**Cmd+Shift+K** on Mac) from anywhere in the
@@ -395,7 +483,8 @@ change it there.
 ## Tips and things to know
 
 - Snapshots are stored entirely on your device (nothing is sent over the
-  network) — see [PRD.md](./PRD.md) if you're curious about the
+  network; the optional [agent bridge](#using-tabbuddy-with-ai-agents) only
+  talks to your own computer) — see [PRD.md](./PRD.md) if you're curious about the
   permissions TabBuddy uses and why.
 - Because storage is local, snapshots don't automatically sync between
   computers — use [export/import](#exporting-and-sharing) to move them

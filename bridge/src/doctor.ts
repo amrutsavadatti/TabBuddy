@@ -4,12 +4,15 @@ import path from 'node:path';
 import { PROTOCOL_VERSION, type HelloResult } from '../protocol.js';
 import { BrowserUnreachableError } from './client.js';
 import {
-  browserTargets,
   detectExtensionIds,
   launcherPathFor,
+  manifestFilesFor,
   MANIFEST_FILE,
+  systemRegistry,
+  targetsFor,
   type InstallEnv,
 } from './install.js';
+import { socketAddress } from './paths.js';
 
 export interface Check {
   name: string;
@@ -35,8 +38,15 @@ function canConnect(socketPath: string): Promise<boolean> {
   });
 }
 
-function parseLauncher(file: string): { nodePath: string; cliPath: string } | null {
-  const match = /^exec '((?:[^']|'\\'')*)' '((?:[^']|'\\'')*)' host/m.exec(fs.readFileSync(file, 'utf8'));
+/** Reads back which Node and CLI a launcher runs, for either flavour. */
+export function parseLauncher(file: string): { nodePath: string; cliPath: string } | null {
+  const text = fs.readFileSync(file, 'utf8');
+  const cmd = /^"((?:[^"])*)" "((?:[^"])*)" host/m.exec(text);
+  if (cmd) {
+    const unescape = (s: string) => s.replaceAll('%%', '%');
+    return { nodePath: unescape(cmd[1]!), cliPath: unescape(cmd[2]!) };
+  }
+  const match = /^exec '((?:[^']|'\\'')*)' '((?:[^']|'\\'')*)' host/m.exec(text);
   if (!match) return null;
   const unquote = (s: string) => s.replaceAll(`'\\''`, "'");
   return { nodePath: unquote(match[1]!), cliPath: unquote(match[2]!) };
@@ -54,7 +64,8 @@ export async function runDoctor(env: InstallEnv, deps: DoctorDeps): Promise<Chec
   const reinstall = 'Run `tabbuddy-bridge install` again.';
 
   // 1. Launcher
-  const launcherPath = launcherPathFor(env.bridgeDir);
+  const platform = env.platform ?? process.platform;
+  const launcherPath = launcherPathFor(env.bridgeDir, platform);
   if (!fs.existsSync(launcherPath)) {
     return fail({
       name: 'Launcher',
@@ -84,7 +95,8 @@ export async function runDoctor(env: InstallEnv, deps: DoctorDeps): Promise<Chec
     });
   }
   try {
-    fs.accessSync(launcherPath, fs.constants.X_OK);
+    // Windows has no execute bit: a .cmd file runs if it exists
+    if (platform !== 'win32') fs.accessSync(launcherPath, fs.constants.X_OK);
   } catch {
     return fail({ name: 'Launcher', ok: false, detail: 'The launcher is not executable.', fix: reinstall });
   }
@@ -93,21 +105,36 @@ export async function runDoctor(env: InstallEnv, deps: DoctorDeps): Promise<Chec
   // 2. Host manifests. A browser with TabBuddy loaded needs a manifest in
   // every folder it reads (Brave reads Chrome's); if none has it loaded, at
   // least one manifest must exist somewhere.
-  const targets = browserTargets(env.home, env.platform).filter((t) => fs.existsSync(t.dataDir));
+  const targets = targetsFor(env).filter((t) => fs.existsSync(t.dataDir));
+  const registry = env.registry ?? (platform === 'win32' ? systemRegistry() : undefined);
   const loadedIds = new Map(targets.map((t) => [t.id, detectExtensionIds(t.dataDir)]));
   const inUse = targets.filter((t) => (loadedIds.get(t.id) ?? []).length > 0);
   const required = inUse.length > 0 ? inUse : targets;
   const files: { target: (typeof targets)[number]; file: string }[] = [];
   for (const target of required) {
-    for (const dir of target.manifestDirs) {
-      const file = path.join(dir, MANIFEST_FILE);
+    for (const file of manifestFilesFor(target, env)) {
       if (fs.existsSync(file)) {
         files.push({ target, file });
       } else if (inUse.length > 0) {
         return fail({
           name: 'Host manifest',
           ok: false,
-          detail: `${target.name} reads ${dir}, which has no ${MANIFEST_FILE}.`,
+          detail: `${target.name} needs ${file}, which does not exist.`,
+          fix: 'Run `tabbuddy-bridge install`.',
+        });
+      }
+    }
+    // On Windows the browser only finds the manifest through its registry key.
+    if (target.registryKey && registry && inUse.includes(target)) {
+      const [file] = manifestFilesFor(target, env);
+      const value = registry.read(target.registryKey);
+      if (value !== file) {
+        return fail({
+          name: 'Host manifest',
+          ok: false,
+          detail: value
+            ? `${target.name}'s registry key ${target.registryKey} points at ${value}, not ${file}.`
+            : `${target.name} has no registry key ${target.registryKey}.`,
           fix: 'Run `tabbuddy-bridge install`.',
         });
       }
@@ -166,7 +193,7 @@ export async function runDoctor(env: InstallEnv, deps: DoctorDeps): Promise<Chec
   }
 
   // 4. Socket
-  const socketPath = path.join(env.bridgeDir, 'bridge.sock');
+  const socketPath = socketAddress(env.bridgeDir, platform);
   if (!(await canConnect(socketPath))) {
     return fail({
       name: 'Socket',

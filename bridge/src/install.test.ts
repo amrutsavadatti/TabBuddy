@@ -14,6 +14,7 @@ import {
   UnsupportedPlatformError,
 } from './install.js';
 import { makeHome } from './testHome.js';
+import { isTemporaryInstall, mcpAddCommand, systemRegistry, WINDOWS_LAUNCHER_FILE } from './install.js';
 
 const homes: ReturnType<typeof makeHome>[] = [];
 function home() {
@@ -34,8 +35,32 @@ describe('browserTargets', () => {
     ]);
   });
 
-  it('refuses other platforms for now', () => {
-    expect(() => browserTargets('/home/me', 'linux')).toThrow(UnsupportedPlatformError);
+  it('lists the Linux data folders, each with its own NativeMessagingHosts', () => {
+    const targets = browserTargets('/home/me', 'linux');
+    expect(targets.map((t) => [t.id, t.dataDir, t.manifestDirs])).toEqual([
+      ['chrome', '/home/me/.config/google-chrome', ['/home/me/.config/google-chrome/NativeMessagingHosts']],
+      [
+        'brave',
+        '/home/me/.config/BraveSoftware/Brave-Browser',
+        ['/home/me/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts'],
+      ],
+      ['edge', '/home/me/.config/microsoft-edge', ['/home/me/.config/microsoft-edge/NativeMessagingHosts']],
+      ['chromium', '/home/me/.config/chromium', ['/home/me/.config/chromium/NativeMessagingHosts']],
+    ]);
+  });
+
+  it('lists Windows browsers by registry key, with no manifest folders', () => {
+    const targets = browserTargets('C:/Users/me', 'win32', 'C:/Users/me/AppData/Local');
+    expect(targets.map((t) => [t.id, t.registryKey, t.manifestDirs])).toEqual([
+      ['chrome', 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.tabbuddy.bridge', []],
+      ['brave', 'HKCU\\Software\\BraveSoftware\\Brave-Browser\\NativeMessagingHosts\\com.tabbuddy.bridge', []],
+      ['edge', 'HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\com.tabbuddy.bridge', []],
+    ]);
+    expect(targets[0]!.dataDir).toBe(path.join('C:/Users/me/AppData/Local', 'Google', 'Chrome', 'User Data'));
+  });
+
+  it('refuses platforms it does not know', () => {
+    expect(() => browserTargets('/home/me', 'freebsd')).toThrow(UnsupportedPlatformError);
   });
 });
 
@@ -181,5 +206,156 @@ describe('uninstall', () => {
 
   it('reports nothing to remove on a clean machine', () => {
     expect(uninstall(home().env)).toEqual([]);
+  });
+});
+
+describe('install on Linux', () => {
+  it('writes the manifest inside each browser\'s own folder, with an executable launcher', () => {
+    const h = makeHome('linux');
+    homes.push(h);
+    h.addBrowser('google-chrome', { id: 'chromebuddy' });
+    h.addBrowser('BraveSoftware/Brave-Browser', { id: 'bravebuddy' });
+    h.addBrowser('chromium'); // installed, no TabBuddy
+    const report = install(h.env);
+
+    for (const [dir, id] of [
+      ['google-chrome', 'chromebuddy'],
+      ['BraveSoftware/Brave-Browser', 'bravebuddy'],
+    ] as const) {
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(h.support, dir, 'NativeMessagingHosts', MANIFEST_FILE), 'utf8'),
+      );
+      expect(manifest.allowed_origins).toEqual([`chrome-extension://${id}/`]);
+      expect(manifest.path).toBe(launcherPathFor(h.env.bridgeDir, 'linux'));
+    }
+    expect(fs.statSync(report.launcherPath).mode & 0o777).toBe(0o755);
+    expect(report.outcomes.map((o) => [o.browser, o.status])).toEqual([
+      ['Chrome', 'written'],
+      ['Brave', 'written'],
+      ['Edge', 'not-installed'],
+      ['Chromium', 'no-extension'],
+    ]);
+  });
+
+  it('uninstalls what it wrote and nothing else', () => {
+    const h = makeHome('linux');
+    homes.push(h);
+    h.addBrowser('google-chrome', { id: 'chromebuddy' });
+    install(h.env);
+    expect(uninstall(h.env)).toHaveLength(2);
+    expect(uninstall(h.env)).toEqual([]);
+  });
+});
+
+describe('install on Windows', () => {
+  const chromeKey = 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.tabbuddy.bridge';
+  const braveKey = 'HKCU\\Software\\BraveSoftware\\Brave-Browser\\NativeMessagingHosts\\com.tabbuddy.bridge';
+
+  it('writes one shared manifest, a .cmd launcher, and a registry key per browser', () => {
+    const h = makeHome('win32');
+    homes.push(h);
+    h.addBrowser('Google/Chrome/User Data', { id: 'chromebuddy' });
+    h.addBrowser('BraveSoftware/Brave-Browser/User Data', { id: 'bravebuddy' });
+    const report = install(h.env);
+
+    const manifestFile = path.join(h.env.bridgeDir, MANIFEST_FILE);
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    expect(manifest.allowed_origins.sort()).toEqual([
+      'chrome-extension://bravebuddy/',
+      'chrome-extension://chromebuddy/',
+    ]);
+    expect(manifest.path).toBe(path.join(h.env.bridgeDir, WINDOWS_LAUNCHER_FILE));
+    expect(report.launcherPath).toBe(manifest.path);
+    expect(fs.readFileSync(report.launcherPath, 'utf8')).toMatch(/^@echo off\r\n"/);
+    expect(h.registry.keys.get(chromeKey)).toBe(manifestFile);
+    expect(h.registry.keys.get(braveKey)).toBe(manifestFile);
+    expect(report.outcomes.find((o) => o.browser === 'Brave')).toMatchObject({ registryKey: braveKey });
+  });
+
+  it('leaves the registry alone for a browser without TabBuddy', () => {
+    const h = makeHome('win32');
+    homes.push(h);
+    h.addBrowser('Google/Chrome/User Data'); // installed, no TabBuddy
+    h.addBrowser('Microsoft/Edge/User Data', { id: 'edgebuddy' });
+    install(h.env);
+    expect([...h.registry.keys.keys()]).toEqual([
+      'HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\com.tabbuddy.bridge',
+    ]);
+  });
+
+  it('uninstall removes its keys, its files, and a key that points somewhere else stays', () => {
+    const h = makeHome('win32');
+    homes.push(h);
+    h.addBrowser('Google/Chrome/User Data', { id: 'chromebuddy' });
+    h.addBrowser('BraveSoftware/Brave-Browser/User Data', { id: 'bravebuddy' });
+    install(h.env);
+    h.registry.set(braveKey, 'C:\\somebody-else\\host.json'); // not ours any more
+
+    const removed = uninstall(h.env);
+    expect(removed).toContain(`registry: ${chromeKey}`);
+    expect(removed).not.toContain(`registry: ${braveKey}`);
+    expect(h.registry.keys.has(chromeKey)).toBe(false);
+    expect(h.registry.keys.get(braveKey)).toBe('C:\\somebody-else\\host.json');
+    expect(fs.existsSync(path.join(h.env.bridgeDir, MANIFEST_FILE))).toBe(false);
+    expect(fs.existsSync(path.join(h.env.bridgeDir, WINDOWS_LAUNCHER_FILE))).toBe(false);
+  });
+});
+
+describe('buildLauncher on Windows', () => {
+  it('is a .cmd that runs Node by absolute path and forwards the arguments', () => {
+    expect(buildLauncher({ nodePath: 'C:\\Program Files\\nodejs\\node.exe', cliPath: 'C:\\b\\cli.js' }, 'win32')).toBe(
+      '@echo off\r\n"C:\\Program Files\\nodejs\\node.exe" "C:\\b\\cli.js" host %*\r\n',
+    );
+  });
+
+  it('doubles a percent sign, which cmd would otherwise expand', () => {
+    expect(buildLauncher({ nodePath: 'C:\\n\\node.exe', cliPath: 'C:\\100%\\cli.js' }, 'win32')).toContain('"C:\\100%%\\cli.js"');
+  });
+});
+
+describe('systemRegistry', () => {
+  const fakeRun = (calls: string[][], output = '') =>
+    ((command: string, args: string[]) => {
+      calls.push([command, ...args]);
+      return Buffer.from(output);
+    }) as unknown as typeof execFileSync;
+
+  it('writes the default value of a key with reg add', () => {
+    const calls: string[][] = [];
+    systemRegistry(fakeRun(calls)).set('HKCU\\Software\\X', 'C:\\m.json');
+    expect(calls).toEqual([['reg', 'add', 'HKCU\\Software\\X', '/ve', '/t', 'REG_SZ', '/d', 'C:\\m.json', '/f']]);
+  });
+
+  it('reads the value out of reg query output, whatever language "(Default)" is in', () => {
+    const output = '\r\nHKEY_CURRENT_USER\\Software\\X\r\n    (Par défaut)    REG_SZ    C:\\Users\\me\\.tabbuddy\\m.json\r\n\r\n';
+    expect(systemRegistry(fakeRun([], output)).read('HKCU\\Software\\X')).toBe('C:\\Users\\me\\.tabbuddy\\m.json');
+  });
+
+  it('reads null when the key does not exist, and does not throw when deleting one that is gone', () => {
+    const failing = (() => {
+      throw new Error('ERROR: The system was unable to find the specified registry key or value.');
+    }) as unknown as typeof execFileSync;
+    expect(systemRegistry(failing).read('HKCU\\Software\\X')).toBeNull();
+    expect(() => systemRegistry(failing).remove('HKCU\\Software\\X')).not.toThrow();
+  });
+});
+
+describe('mcpAddCommand and isTemporaryInstall', () => {
+  it('quotes for a POSIX shell, including an apostrophe', () => {
+    expect(mcpAddCommand({ nodePath: '/usr/bin/node', cliPath: "/home/o'neil/cli.js" }, 'linux')).toBe(
+      "claude mcp add tabbuddy -- '/usr/bin/node' '/home/o'\\''neil/cli.js' serve",
+    );
+  });
+
+  it('quotes with double quotes on Windows', () => {
+    expect(mcpAddCommand({ nodePath: 'C:\\Program Files\\nodejs\\node.exe', cliPath: 'C:\\b\\cli.js' }, 'win32')).toBe(
+      'claude mcp add tabbuddy -- "C:\\Program Files\\nodejs\\node.exe" "C:\\b\\cli.js" serve',
+    );
+  });
+
+  it('spots a bridge that lives in the npx cache', () => {
+    expect(isTemporaryInstall('/Users/me/.npm/_npx/abc123/node_modules/tabbuddy-bridge/dist/src/cli.js')).toBe(true);
+    expect(isTemporaryInstall('C:\\Users\\me\\AppData\\Local\\npm-cache\\_npx\\1\\cli.js')).toBe(true);
+    expect(isTemporaryInstall('/usr/local/lib/node_modules/tabbuddy-bridge/dist/src/cli.js')).toBe(false);
   });
 });

@@ -14,7 +14,12 @@ export async function setAgentBridgeEnabled(enabled: boolean): Promise<void> {
  * turns the bridge on. Must be called straight from a click handler: the
  * permission prompt needs a user gesture. Returns false if it was refused. */
 export async function enableAgentBridge(): Promise<boolean> {
-  const granted = await browser.permissions.request({ permissions: ['nativeMessaging'] });
+  let granted: boolean;
+  try {
+    granted = await browser.permissions.request({ permissions: ['nativeMessaging'] });
+  } catch {
+    return false; // a browser build that does not declare the permission rejects the request
+  }
   if (!granted) return false;
   await setAgentBridgeEnabled(true);
   return true;

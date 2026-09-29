@@ -4,6 +4,7 @@ import type { Readable, Writable } from 'node:stream';
 import type { BridgeResponse } from '../protocol.js';
 import { encodeFrame, FrameDecoder, LineDecoder } from './framing.js';
 import type { Logger } from './logger.js';
+import { isPipeAddress } from './paths.js';
 
 /** Another host already owns the socket, so a second one must not start. */
 export class HostAlreadyRunningError extends Error {
@@ -27,9 +28,11 @@ export interface RunningHost {
   close(): Promise<void>;
 }
 
-/** Removes a leftover socket file, but only if nobody is listening on it. */
+/** Removes a leftover socket file, but only if nobody is listening on it. A
+ * Windows named pipe leaves nothing behind, so there it only checks. */
 async function claimSocket(socketPath: string): Promise<void> {
-  if (!fs.existsSync(socketPath)) return;
+  const pipe = isPipeAddress(socketPath);
+  if (!pipe && !fs.existsSync(socketPath)) return;
   const alive = await new Promise<boolean>((resolve) => {
     const probe = net.createConnection(socketPath);
     probe.once('connect', () => {
@@ -39,7 +42,7 @@ async function claimSocket(socketPath: string): Promise<void> {
     probe.once('error', () => resolve(false));
   });
   if (alive) throw new HostAlreadyRunningError(socketPath);
-  fs.rmSync(socketPath, { force: true });
+  if (!pipe) fs.rmSync(socketPath, { force: true });
 }
 
 interface Pending {
@@ -111,14 +114,14 @@ export async function startHost({ input, output, socketPath, log }: HostOptions)
       resolve();
     });
   });
-  fs.chmodSync(socketPath, 0o600);
+  if (!isPipeAddress(socketPath)) fs.chmodSync(socketPath, 0o600);
   log(`Host listening on ${socketPath}`);
 
   const close = (): Promise<void> => {
     closing ??= new Promise<void>((resolve) => {
       for (const socket of sockets) socket.destroy();
       server.close(() => {
-        fs.rmSync(socketPath, { force: true });
+        if (!isPipeAddress(socketPath)) fs.rmSync(socketPath, { force: true });
         log('Host closed');
         resolve();
         resolveClosed();

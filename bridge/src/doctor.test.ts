@@ -3,8 +3,8 @@ import net from 'node:net';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PROTOCOL_VERSION } from '../protocol.js';
-import { runDoctor, type Check } from './doctor.js';
-import { install, launcherPathFor, MANIFEST_FILE } from './install.js';
+import { parseLauncher, runDoctor, type Check } from './doctor.js';
+import { buildLauncher, install, launcherPathFor, MANIFEST_FILE } from './install.js';
 import { makeHome } from './testHome.js';
 
 const homes: ReturnType<typeof makeHome>[] = [];
@@ -131,5 +131,93 @@ describe('doctor', () => {
     );
     expect(failure).toMatchObject({ name: 'Extension reply' });
     expect(failure?.detail).toContain('No answer');
+  });
+});
+
+describe('doctor on Linux', () => {
+  it('passes with a live socket', async () => {
+    const h = makeHome('linux');
+    homes.push(h);
+    h.addBrowser('google-chrome', { id: 'chromebuddy' });
+    install(h.env);
+    await listen(h);
+    const checks = await runDoctor(h.env, { hello });
+    expect(checks.every((c) => c.ok)).toBe(true);
+    expect(checks.map((c) => c.name)).toEqual([
+      'Launcher',
+      'Host manifest',
+      'Extension ID',
+      'Socket',
+      'Extension reply',
+    ]);
+  });
+
+  it('names the browser folder that lacks the manifest', async () => {
+    const h = makeHome('linux');
+    homes.push(h);
+    h.addBrowser('google-chrome', { id: 'chromebuddy' });
+    install(h.env);
+    fs.rmSync(path.join(h.support, 'google-chrome/NativeMessagingHosts', MANIFEST_FILE));
+    expect(firstFailure(await runDoctor(h.env, { hello }))).toMatchObject({
+      name: 'Host manifest',
+      detail: expect.stringContaining('google-chrome'),
+    });
+  });
+});
+
+describe('doctor on Windows', () => {
+  const chromeKey = 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.tabbuddy.bridge';
+
+  function windowsInstalled() {
+    const h = makeHome('win32');
+    homes.push(h);
+    h.addBrowser('Google/Chrome/User Data', { id: 'chromebuddy' });
+    install(h.env);
+    return h;
+  }
+
+  it('checks the .cmd launcher, the manifest, the registry key and the ID, then the pipe', async () => {
+    const h = windowsInstalled();
+    const checks = await runDoctor(h.env, { hello });
+    // no pipe can be listening here, so it gets as far as the socket step
+    expect(checks.map((c) => [c.name, c.ok])).toEqual([
+      ['Launcher', true],
+      ['Host manifest', true],
+      ['Extension ID', true],
+      ['Socket', false],
+    ]);
+    expect(checks[3]!.detail).toContain('\\\\.\\pipe\\tabbuddy-bridge-');
+  });
+
+  it('does not ask for an execute bit on a .cmd file', async () => {
+    const h = windowsInstalled();
+    fs.chmodSync(launcherPathFor(h.env.bridgeDir, 'win32'), 0o644);
+    expect((await runDoctor(h.env, { hello }))[0]).toMatchObject({ name: 'Launcher', ok: true });
+  });
+
+  it('fails when the registry key is missing', async () => {
+    const h = windowsInstalled();
+    h.registry.remove(chromeKey);
+    expect(firstFailure(await runDoctor(h.env, { hello }))).toMatchObject({
+      name: 'Host manifest',
+      detail: expect.stringContaining('no registry key'),
+      fix: expect.stringContaining('install'),
+    });
+  });
+
+  it('fails when the registry key points somewhere else', async () => {
+    const h = windowsInstalled();
+    h.registry.set(chromeKey, 'C:\\elsewhere\\m.json');
+    expect(firstFailure(await runDoctor(h.env, { hello }))).toMatchObject({
+      name: 'Host manifest',
+      detail: expect.stringContaining('C:\\elsewhere\\m.json'),
+    });
+  });
+
+  it('reads Node and the bridge back out of a .cmd launcher, percent signs included', () => {
+    const h = windowsInstalled();
+    const file = path.join(h.home, 'l.cmd');
+    fs.writeFileSync(file, buildLauncher({ nodePath: 'C:\\Program Files\\n\\node.exe', cliPath: 'C:\\100%\\cli.js' }, 'win32'));
+    expect(parseLauncher(file)).toEqual({ nodePath: 'C:\\Program Files\\n\\node.exe', cliPath: 'C:\\100%\\cli.js' });
   });
 });

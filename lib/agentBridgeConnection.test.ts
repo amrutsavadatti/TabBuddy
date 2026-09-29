@@ -404,3 +404,18 @@ describe('retry timers', () => {
     expect(timers.takeAlarmCallback(RETRY_ALARM_NAME)).toBeNull();
   });
 });
+
+describe('enabling the bridge', () => {
+  it('reports a refused or unsupported permission request as not enabled, without throwing', async () => {
+    const { enableAgentBridge } = await import('./agentBridgeSettings');
+    const request = vi.spyOn(fakeBrowser.permissions, 'request');
+    request.mockResolvedValueOnce(false as never);
+    expect(await enableAgentBridge()).toBe(false);
+    request.mockRejectedValueOnce(new Error('Permission is not in the manifest'));
+    expect(await enableAgentBridge()).toBe(false);
+    expect(await getAgentBridgeEnabled()).toBe(false);
+    request.mockResolvedValueOnce(true as never);
+    expect(await enableAgentBridge()).toBe(true);
+    expect(await getAgentBridgeEnabled()).toBe(true);
+  });
+});

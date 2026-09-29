@@ -3,13 +3,33 @@
   "description": "Native messaging host and MCP server that connects AI agents to the TabBuddy browser extension.",
   "license": "MIT",
   "version": "0.1.0",
-  "private": true,
+  "homepage": "https://github.com/amrutsavadatti/TabBuddy/tree/main/bridge#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amrutsavadatti/TabBuddy.git",
+    "directory": "bridge"
+  },
+  "bugs": {
+    "url": "https://github.com/amrutsavadatti/TabBuddy/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "browser",
+    "tabs",
+    "tabbuddy",
+    "chrome",
+    "native-messaging",
+    "claude"
+  ],
   "type": "module",
   "bin": {
     "tabbuddy-bridge": "dist/src/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20"
@@ -18,7 +38,8 @@
     "build": "tsc -p tsconfig.build.json",
     "compile": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

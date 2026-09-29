@@ -845,19 +845,34 @@ a messy real profile and adjust the wording.)*
 
 **Commit:** `feat(bridge): add MCP prompts and tune tool descriptions`
 
-### 🔲 Slice S3 — Linux, Windows and Firefox install
+### ✅ Slice S3 — Linux and Windows install (Firefox dropped)
 **Build:**
 - `install`, `uninstall` and `doctor` support Linux paths, Windows (registry
   entries and a named pipe in place of the Unix socket) and Firefox
   (`allowed_extensions` and the gecko ID).
 - Verify `nativeMessaging` works as an optional permission on Firefox.
 
+*(Decided: Firefox is out of scope for now, so the `allowed_extensions` /
+gecko-ID work is not done, and the optional `nativeMessaging` permission is now
+declared for Chromium builds only, leaving the Firefox package unchanged.
+Built as: Linux Chrome, Brave, Edge and Chromium read `NativeMessagingHosts`
+inside their own data folder; Windows Chrome, Brave and Edge get one shared
+manifest in `~/.tabbuddy` and a per-browser `HKCU` registry key (written with
+`reg.exe`) pointing to it, plus a `.cmd` launcher. The Windows socket is a named
+pipe whose name carries a hash of the bridge folder. `uninstall` removes only
+registry keys that still point at our manifest, and `doctor` checks the key.
+**Not yet verified on a real Linux or Windows machine:** everything is
+unit-tested with a fake home, a fake registry and an injected platform, and the
+Brave-on-Linux/Windows folder and key are assumed to follow each browser's own
+folder, unlike macOS. The pipe's access rights are the operating system's default
+for a pipe its owner creates, also unchecked.)*
+
 **Test:** Manual on each platform and browser available to test on. `doctor`
 passes, and `ping` and `list_snapshots` work.
 
 **Commit:** `feat(bridge): support Linux, Windows and Firefox`
 
-### 🔲 Slice S4 — Docs, onboarding and release
+### ✅ Slice S4 — Docs, onboarding and release (not yet published)
 **Build:**
 - README: an "Use TabBuddy with AI agents" section, plus the privacy
   statement.
@@ -865,6 +880,18 @@ passes, and `ping` and `list_snapshots` work.
 - PRD: a link to this document.
 - An onboarding step, a CHANGELOG entry and `excludeSources: ['bridge/**']`.
 - Publish `tabbuddy-bridge` to npm, and bump the extension version.
+
+*(Done: README section and privacy statement, USER_GUIDE walkthrough, PRD and
+CONTRIBUTING links, the welcome-tour step, a 1.1.0 changelog entry, the version
+bump to 1.1.0, and a package ready to publish (`private` removed, metadata,
+`prepublishOnly`; `npm pack` was installed into a scratch prefix and its `serve`
+answered `initialize` and listed the prompts). **Not done, on purpose: `npm
+publish`, a git tag and pushing.** Two changes to the plan: `excludeSources`
+keeps `bridge/protocol.ts`, because the extension imports it, so Firefox
+reviewers can still build; and the docs and the settings dialog tell people to
+`npm install -g tabbuddy-bridge` rather than use `npx`, because `install`
+records the bridge's own path and npx runs it from a cache that npm empties
+(`install` now warns when it sees that).)*
 
 **Test:**
 - Manual: a fresh machine or profile follows only the README and reaches a
@@ -885,7 +912,7 @@ passes, and `ping` and `list_snapshots` work.
 | ✅ **M3b — Triage assistant, reading and filing** | T1–T3 | "Summarise this window and recommend a cleanup"; file tabs into new or existing snapshots (closing is still manual) |
 | **M4 — Safe cleanup** | X1–X3 | "Clean up my browser" with approval and undo |
 | ✅ **M4b — Agentic triage** | T4–T6 | The full loop: recommend, user decides, one confirmation, unsure tabs go to manual triage |
-| **M5 — Release** | ✅ X4, ✅ S1, S2 ✅, S3–S4 | A one-command install for other users |
+| **M5 — Release** | X4, S1–S4 (built; publishing pending) | A one-command install for other users |
 
 ## Notes from building
 

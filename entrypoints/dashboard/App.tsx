@@ -23,6 +23,7 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   ArrowLeft,
   Bell,
+  Bot,
   CheckSquare,
   ChevronDown,
   ChevronUp,
@@ -270,6 +271,13 @@ const ONBOARDING_STEPS: {
     description:
       'TabBuddy checks on a schedule you pick for tabs you haven\'t touched in as long as you say, then nudges you to Close, Archive & Close, or Keep them. Tune both settings or turn it off from the settings bar (the gear, then Automation).',
     accent: VIBES[1]!.swatch,
+  },
+  {
+    icon: Bot,
+    title: 'Agent bridge',
+    description:
+      'Let an AI agent like Claude Code use TabBuddy: open a snapshot by name, find that page you saved, or clean up a crowded window. It is off until you turn it on (the gear, then Automation, then Agent bridge), it talks only to your own computer, and nothing is closed until you say yes. You can undo what an agent did.',
+    accent: VIBES[3]!.swatch,
   },
   {
     icon: Palette,

@@ -24,6 +24,10 @@ See [README.md](./README.md) for more detail on the build/load steps.
   (framework-agnostic, no React)
 - `components/ui/` — hand-built shadcn/ui-style primitives (Button,
   Dialog, AlertDialog)
+- `bridge/` — the optional agent bridge: a separate Node package
+  (`tabbuddy-bridge`) with its own `package.json` and tests
+  (`cd bridge && npm install && npm test`). Its extension-side half lives in
+  `lib/agent*.ts`. See [bridge/README.md](./bridge/README.md).
 
 [PRD.md](./PRD.md) has the full product spec and data model.
 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) shows how the project was

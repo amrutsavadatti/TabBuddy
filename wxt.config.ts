@@ -19,8 +19,10 @@ export default defineConfig({
       'alarms',
       'idle',
     ],
-    // Requested only when the user turns on the agent bridge.
-    optional_permissions: ['nativeMessaging'],
+    // Requested only when the user turns on the agent bridge. Chromium only:
+    // installing the bridge on Firefox isn't supported yet, and declaring a
+    // permission there that nothing can use risks the store review.
+    optional_permissions: env.browser === 'chrome' ? ['nativeMessaging' as const] : [],
     commands: {
       'open-dashboard': {
         suggested_key: {
@@ -37,7 +39,20 @@ export default defineConfig({
   zip: {
     // Firefox review requires a sources ZIP; without this, WXT sweeps up the
     // whole repo root, including the multi-GB Website/ folder (screen
-    // recordings etc.) that isn't part of the extension's source.
-    excludeSources: ['Website/**'],
+    // recordings etc.) that isn't part of the extension's source. bridge/ is
+    // the separate tabbuddy-bridge npm package, except bridge/protocol.ts,
+    // which the extension imports and so must stay in the sources.
+    excludeSources: [
+      'Website/**',
+      'bridge/src/**',
+      'bridge/dist/**',
+      'bridge/node_modules/**',
+      'bridge/package.json',
+      'bridge/package-lock.json',
+      'bridge/tsconfig*.json',
+      'bridge/vitest.config.ts',
+      'bridge/README.md',
+      'bridge/.*',
+    ],
   },
 });
