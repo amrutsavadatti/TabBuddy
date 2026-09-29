@@ -9,6 +9,10 @@ import {
   type HelloResult,
   type ListSnapshotsParams,
   type OpenWindowsResult,
+  type SearchScope,
+  type SearchTabsParams,
+  type SearchTabsResult,
+  MAX_SEARCH_RESULTS,
   type SnapshotDetail,
   type SnapshotSummary,
   MAX_SNAPSHOT_TABS_PER_CALL,
@@ -18,6 +22,7 @@ import { getCategories, getSnapshotsInCategory } from './categories';
 import { resolveLazyTab } from './lazyTab';
 import { getManagedTabIds } from './managedTabs';
 import { shapeOpenWindows } from './openWindows';
+import { queryTokens, searchTabs } from './searchTabs';
 import { getSnapshots } from './storage';
 import type { Category, Snapshot } from './types';
 
@@ -107,6 +112,42 @@ export function describeSnapshot(
   };
 }
 
+async function loadOpenWindows(limit?: number): Promise<OpenWindowsResult> {
+  const [windows, snapshots, managedTabIds] = await Promise.all([
+    browser.windows.getAll({ populate: true }),
+    getSnapshots(),
+    getManagedTabIds(),
+  ]);
+  return shapeOpenWindows({
+    windows,
+    snapshots,
+    managedTabIds,
+    resolveLazy: resolveLazyTab,
+    extensionOrigin: browser.runtime.getURL('/' as never),
+    limit,
+  });
+}
+
+const SEARCH_SCOPES: SearchScope[] = ['saved', 'archived', 'open', 'all'];
+
+export function parseSearchParams(params: unknown): { query: string; scope: SearchScope; limit: number } {
+  const p = (params ?? {}) as Partial<SearchTabsParams>;
+  if (typeof p.query !== 'string' || queryTokens(p.query).length === 0) {
+    throw new BridgeFailure('invalid_params', 'query must contain at least one word to search for.');
+  }
+  if (p.scope !== undefined && !SEARCH_SCOPES.includes(p.scope)) {
+    throw new BridgeFailure('invalid_params', `scope must be one of: ${SEARCH_SCOPES.join(', ')}.`);
+  }
+  if (p.limit !== undefined && (!Number.isInteger(p.limit) || p.limit < 1)) {
+    throw new BridgeFailure('invalid_params', 'limit must be a whole number, 1 or more.');
+  }
+  return {
+    query: p.query,
+    scope: p.scope ?? 'all',
+    limit: Math.min(p.limit ?? MAX_SEARCH_RESULTS, MAX_SEARCH_RESULTS),
+  };
+}
+
 export const handlers: HandlerTable = {
   hello: async (): Promise<HelloResult> => ({
     protocol: PROTOCOL_VERSION,
@@ -132,19 +173,15 @@ export const handlers: HandlerTable = {
       snapshotCount: getSnapshotsInCategory(snapshots, c.id).length,
     }));
   },
-  listOpenWindows: async (): Promise<OpenWindowsResult> => {
-    const [windows, snapshots, managedTabIds] = await Promise.all([
-      browser.windows.getAll({ populate: true }),
+  listOpenWindows: (): Promise<OpenWindowsResult> => loadOpenWindows(),
+  searchTabs: async (params): Promise<SearchTabsResult> => {
+    const { query, scope, limit } = parseSearchParams(params);
+    const wantsOpen = scope === 'open' || scope === 'all';
+    const [snapshots, open] = await Promise.all([
       getSnapshots(),
-      getManagedTabIds(),
+      wantsOpen ? loadOpenWindows(Number.MAX_SAFE_INTEGER) : Promise.resolve(null),
     ]);
-    return shapeOpenWindows({
-      windows,
-      snapshots,
-      managedTabIds,
-      resolveLazy: resolveLazyTab,
-      extensionOrigin: browser.runtime.getURL('/' as never),
-    });
+    return searchTabs({ query, scope, snapshots, openWindows: open?.windows ?? [], limit });
   },
   getSnapshot: async (params) => {
     const { id, offset, limit } = parseGetSnapshotParams(params);

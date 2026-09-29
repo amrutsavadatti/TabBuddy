@@ -8,7 +8,8 @@ export type Method =
   | 'listSnapshots'
   | 'getSnapshot'
   | 'listCategories'
-  | 'listOpenWindows';
+  | 'listOpenWindows'
+  | 'searchTabs';
 
 export type ErrorCode =
   | 'unknown_method'
@@ -127,5 +128,50 @@ export interface OpenWindowsResult {
   windows: OpenWindow[];
   tabCount: number;
   /** True when tabs beyond MAX_OPEN_TABS were left out. */
+  truncated: boolean;
+}
+
+export type SearchScope = 'saved' | 'archived' | 'open' | 'all';
+
+/** Most matches `searchTabs` returns in one call. */
+export const MAX_SEARCH_RESULTS = 50;
+
+export interface SearchTabsParams {
+  query: string;
+  scope?: SearchScope;
+  limit?: number;
+}
+
+interface SearchMatchBase {
+  url: string;
+  title: string;
+  /** How many of the query's words this tab matched. */
+  score: number;
+}
+
+/** A tab stored in a saved snapshot, or in the reserved Archived snapshot. */
+export interface SavedSearchMatch extends SearchMatchBase {
+  source: 'saved' | 'archived';
+  snapshotId: string;
+  snapshotName: string;
+  /** The tab's position in the snapshot, as get_snapshot reports it. */
+  index: number;
+}
+
+/** A tab that is open in the browser right now. */
+export interface OpenSearchMatch extends SearchMatchBase {
+  source: 'open';
+  windowId: number;
+  tabId: number;
+  lastAccessed: number | null;
+}
+
+export type SearchMatch = SavedSearchMatch | OpenSearchMatch;
+
+export interface SearchTabsResult {
+  matches: SearchMatch[];
+  /** All matches found, before the cap. */
+  total: number;
+  /** True when `total` exceeds the matches returned. */
   truncated: boolean;
 }

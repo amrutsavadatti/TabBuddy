@@ -29,7 +29,7 @@ async function connect(send: Send) {
 const textOf = (result: any) => result.content[0].text as string;
 
 describe('tools', () => {
-  it('offers the four read-only tools', async () => {
+  it('offers the five read-only tools', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
@@ -37,6 +37,7 @@ describe('tools', () => {
       'list_categories',
       'list_open_windows',
       'list_snapshots',
+      'search_tabs',
     ]);
     for (const tool of tools) {
       expect(tool.annotations?.readOnlyHint).toBe(true);
@@ -73,6 +74,26 @@ describe('tools', () => {
     const wins = await client.callTool({ name: 'list_open_windows', arguments: {} });
     expect(send).toHaveBeenLastCalledWith('listOpenWindows', undefined);
     expect(JSON.parse(textOf(wins))).toEqual({ windows: [], tabCount: 0, truncated: false });
+  });
+
+  it('search_tabs forwards the query, scope and limit', async () => {
+    const send = vi.fn(async () => ({ matches: [], total: 0, truncated: false }));
+    const client = await connect(send);
+    await client.callTool({
+      name: 'search_tabs',
+      arguments: { query: 'pricing page', scope: 'archived', limit: 5 },
+    });
+    expect(send).toHaveBeenCalledWith('searchTabs', { query: 'pricing page', scope: 'archived', limit: 5 });
+  });
+
+  it('rejects search_tabs arguments that break the schema, without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    for (const args of [{}, { query: '' }, { query: 'a', scope: 'everywhere' }, { query: 'a', limit: 51 }]) {
+      const result = await client.callTool({ name: 'search_tabs', arguments: args }).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('get_snapshot forwards its arguments', async () => {

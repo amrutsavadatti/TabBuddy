@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import {
   MAX_OPEN_TABS,
+  MAX_SEARCH_RESULTS,
   MAX_SNAPSHOT_TABS_PER_CALL,
   PROTOCOL_VERSION,
   type HelloResult,
@@ -118,6 +119,42 @@ export function createServer(send: Send): McpServer {
       annotations: { readOnlyHint: true },
     },
     () => runTool(send, 'listOpenWindows'),
+  );
+
+  server.registerTool(
+    'search_tabs',
+    {
+      title: 'Search saved, archived and open tabs',
+      description:
+        "Search the user's tabs by keyword: tabs saved in snapshots, tabs in the Archived snapshot (tabs " +
+        'the user filed away with TabBuddy), and tabs open right now. Use it to find "that page I had ' +
+        'open" when you do not know where it is. Pass a few distinctive keywords, not a sentence: each ' +
+        'word is matched, case-insensitively, against the tab title and URL (domain included), and ' +
+        'filler words (like "page", "tab", "open") are ignored. A tab matches if it contains any word; ' +
+        'tabs matching more of the rarer words come first, then more recently used ones. Each result says where the tab lives: a saved ' +
+        'or archived match has snapshotId, snapshotName and the tab index (as get_snapshot shows it); ' +
+        `an open match has windowId and tabId. scope limits the search; the default is all. At most ` +
+        `${MAX_SEARCH_RESULTS} matches are returned; total and truncated say if there were more, in ` +
+        'which case use more specific keywords. Read-only.',
+      inputSchema: {
+        query: z.string().min(1).describe('Keywords to look for, e.g. "vector database pricing".'),
+        scope: z
+          .enum(['saved', 'archived', 'open', 'all'])
+          .optional()
+          .describe(
+            'saved = snapshots except Archived; archived = the Archived snapshot; open = open tabs; all = everything (default).',
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_SEARCH_RESULTS)
+          .optional()
+          .describe(`Maximum matches to return. Default and maximum ${MAX_SEARCH_RESULTS}.`),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    ({ query, scope, limit }) => runTool(send, 'searchTabs', { query, scope, limit }),
   );
 
   server.registerTool(

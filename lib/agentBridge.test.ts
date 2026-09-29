@@ -6,6 +6,7 @@ import {
   describeSnapshot,
   dispatch,
   parseGetSnapshotParams,
+  parseSearchParams,
   summarizeSnapshot,
 } from './agentBridge';
 import { addCategory, setSnapshotCategories } from './categories';
@@ -305,5 +306,51 @@ describe('listOpenWindows', () => {
     expect(listed.snapshot).toEqual({ id: snapshot.id, name: 'Job Hunt' });
     const listedTab = listed.tabs.find((t: any) => t.id === tab.id);
     expect(listedTab).toMatchObject({ url: 'https://a.test/', managed: true, lazy: false });
+  });
+});
+
+describe('parseSearchParams', () => {
+  it('fills in defaults and caps the limit', () => {
+    expect(parseSearchParams({ query: 'pricing' })).toEqual({ query: 'pricing', scope: 'all', limit: 50 });
+    expect(parseSearchParams({ query: 'x1', limit: 999 }).limit).toBe(50);
+  });
+
+  it.each([
+    [undefined],
+    [{}],
+    [{ query: '' }],
+    [{ query: ' ,, ' }],
+    [{ query: 5 }],
+    [{ query: 'a', scope: 'everywhere' }],
+    [{ query: 'a', limit: 0 }],
+    [{ query: 'a', limit: 1.5 }],
+  ])('rejects %j as invalid_params', (params) => {
+    expect(() => parseSearchParams(params)).toThrow(BridgeFailure);
+  });
+});
+
+describe('searchTabs', () => {
+  it('searches saved, archived and open tabs through the dispatcher', async () => {
+    await addSnapshot(
+      makeSnapshot({ name: 'Research', tabs: [makeTab({ title: 'Vector DB pricing', url: 'https://v.test/' })] }),
+    );
+    await addSnapshot(
+      makeSnapshot({ name: 'Archived', tabs: [makeTab({ title: 'Old pricing sheet', url: 'https://old.test/' })] }),
+    );
+    const win = (await fakeBrowser.windows.create({}))!;
+    await fakeBrowser.tabs.create({ windowId: win.id, url: 'https://live.test/pricing', title: 'Live pricing' } as any);
+
+    const all = await dispatch({ id: 's', method: 'searchTabs', params: { query: 'pricing' } });
+    const result = (all as any).result;
+    expect(result.matches.map((m: any) => m.source).sort()).toEqual(['archived', 'open', 'saved']);
+
+    const archivedOnly = await dispatch({ id: 's', method: 'searchTabs', params: { query: 'pricing', scope: 'archived' } });
+    expect((archivedOnly as any).result.matches.map((m: any) => m.snapshotName)).toEqual(['Archived']);
+  });
+
+  it('answers invalid_params for an empty query', async () => {
+    expect(await dispatch({ id: 's', method: 'searchTabs', params: { query: '' } })).toMatchObject({
+      error: { code: 'invalid_params' },
+    });
   });
 });
