@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import {
   MAX_ADD_TABS,
+  MAX_REQUEST_LENGTH,
   MAX_PROPOSAL_TABS,
   MAX_DUPLICATE_GROUPS,
   MAX_SUMMARY_FLAGGED,
@@ -26,6 +27,14 @@ import { socketPath } from './paths.js';
 
 /** Keep in step with package.json (a test checks). */
 export const SERVER_VERSION = '0.1.0';
+
+/** Shown to the model when it connects. */
+export const SERVER_INSTRUCTIONS =
+  'TabBuddy keeps an activity log that the user reviews in their dashboard, sorted by what they asked ' +
+  'you for. Whenever you act on a request from the user (anything that opens, saves, renames, tags, ' +
+  'archives, closes or removes), pass the same short `request` phrase, in the user\'s words, on every ' +
+  'tool call for that request. Ask before closing, archiving or removing tabs unless the user has ' +
+  'already told you exactly which ones.';
 
 export type Send = (method: string, params?: unknown) => Promise<unknown>;
 
@@ -76,7 +85,20 @@ async function runTool(send: Send, method: string, params?: unknown) {
 }
 
 export function createServer(send: Send): McpServer {
-  const server = new McpServer({ name: 'tabbuddy', version: SERVER_VERSION });
+  const server = new McpServer(
+    { name: 'tabbuddy', version: SERVER_VERSION },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
+
+  const requestField = z
+    .string()
+    .max(MAX_REQUEST_LENGTH)
+    .optional()
+    .describe(
+      'A short phrase (under 120 characters) for what the user asked you to do, in their words, for ' +
+        'example "clean up my Job Hunt window". Pass the same phrase on every call that belongs to that ' +
+        'request: it groups your actions in the activity log the user reviews.',
+    );
 
   server.registerTool(
     'list_snapshots',
@@ -232,10 +254,10 @@ export function createServer(send: Send): McpServer {
         "Depending on the user's lazy-loading setting, only the first tab may load at once and the rest " +
         'load when the user clicks them. Use it when the user asks to open or switch to a workspace. ' +
         'Nothing is closed or changed in the snapshot.',
-      inputSchema: { id: z.string().min(1).describe('Snapshot id, from list_snapshots.') },
+      inputSchema: { id: z.string().min(1).describe('Snapshot id, from list_snapshots.'), request: requestField },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    ({ id }) => runTool(send, 'restoreSnapshot', { id }),
+    ({ id, request }) => runTool(send, 'restoreSnapshot', { id, request }),
   );
 
   server.registerTool(
@@ -275,10 +297,11 @@ export function createServer(send: Send): McpServer {
           .max(MAX_OPEN_URLS)
           .describe('Full web addresses starting with http:// or https://.'),
         newWindow: z.boolean().optional().describe('Open in a new window instead of the current one. Default false.'),
+        request: requestField,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-    ({ urls, newWindow }) => runTool(send, 'openUrls', { urls, newWindow }),
+    ({ urls, newWindow, request }) => runTool(send, 'openUrls', { urls, newWindow, request }),
   );
 
   server.registerTool(
@@ -311,10 +334,11 @@ export function createServer(send: Send): McpServer {
           .max(10)
           .optional()
           .describe('Categories to file it under, from list_categories.'),
+        request: requestField,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    ({ name, windowId, categoryIds }) => runTool(send, 'saveWindow', { name, windowId, categoryIds }),
+    ({ name, windowId, categoryIds, request }) => runTool(send, 'saveWindow', { name, windowId, categoryIds, request }),
   );
 
   const categoryNames = (what: string) =>
@@ -352,10 +376,12 @@ export function createServer(send: Send): McpServer {
           .max(MAX_SNAPSHOT_URLS)
           .describe('Web addresses, or {url, title} pairs.'),
         categoryNames: categoryNames('Categories to file the snapshot under.').optional(),
+        request: requestField,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    ({ name, urls, categoryNames }) => runTool(send, 'createSnapshotFromUrls', { name, urls, categoryNames }),
+    ({ name, urls, categoryNames, request }) =>
+      runTool(send, 'createSnapshotFromUrls', { name, urls, categoryNames, request }),
   );
 
   server.registerTool(
@@ -370,10 +396,13 @@ export function createServer(send: Send): McpServer {
         '(list_snapshots shows isOpen; restore_snapshot opens it), and never for "Archived". Use it only ' +
         'when the user wants the saved snapshot to reflect their current window; confirm first if the ' +
         'tab count would drop noticeably.',
-      inputSchema: { id: z.string().min(1).describe('Snapshot id, from list_snapshots. It must be open.') },
+      inputSchema: {
+        id: z.string().min(1).describe('Snapshot id, from list_snapshots. It must be open.'),
+        request: requestField,
+      },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
-    ({ id }) => runTool(send, 'updateSnapshotFromWindow', { id }),
+    ({ id, request }) => runTool(send, 'updateSnapshotFromWindow', { id, request }),
   );
 
   server.registerTool(
@@ -387,10 +416,11 @@ export function createServer(send: Send): McpServer {
       inputSchema: {
         id: z.string().min(1).describe('Snapshot id, from list_snapshots.'),
         name: z.string().min(1).max(MAX_SNAPSHOT_NAME_LENGTH).describe('The new name.'),
+        request: requestField,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    ({ id, name }) => runTool(send, 'renameSnapshot', { id, name }),
+    ({ id, name, request }) => runTool(send, 'renameSnapshot', { id, name, request }),
   );
 
   server.registerTool(
@@ -405,10 +435,12 @@ export function createServer(send: Send): McpServer {
       inputSchema: {
         snapshotIds: z.array(z.string().min(1)).min(1).max(MAX_TAG_TARGETS).describe('Snapshot ids, from list_snapshots.'),
         categoryNames: categoryNames('Categories to add.').min(1),
+        request: requestField,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    ({ snapshotIds, categoryNames }) => runTool(send, 'tagSnapshots', { snapshotIds, categoryNames }),
+    ({ snapshotIds, categoryNames, request }) =>
+      runTool(send, 'tagSnapshots', { snapshotIds, categoryNames, request }),
   );
 
   server.registerTool(
@@ -497,10 +529,11 @@ export function createServer(send: Send): McpServer {
           .max(MAX_ADD_TABS)
           .optional()
           .describe('Links to add: web addresses, or {url, title} pairs.'),
+        request: requestField,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    ({ id, tabIds, urls }) => runTool(send, 'addTabsToSnapshot', { id, tabIds, urls }),
+    ({ id, tabIds, urls, request }) => runTool(send, 'addTabsToSnapshot', { id, tabIds, urls, request }),
   );
 
   server.registerTool(
@@ -530,10 +563,12 @@ export function createServer(send: Send): McpServer {
           .boolean()
           .optional()
           .describe('Also propose pinned tabs, tabs playing sound and snapshot-owned tabs. Only if the user explicitly asked for those tabs.'),
+        request: requestField,
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
-    ({ tabIds, includeProtected }) => runTool(send, 'proposeArchiveTabs', { tabIds, includeProtected }),
+    ({ tabIds, includeProtected, request }) =>
+      runTool(send, 'proposeArchiveTabs', { tabIds, includeProtected, request }),
   );
 
   server.registerTool(
@@ -563,10 +598,12 @@ export function createServer(send: Send): McpServer {
           .boolean()
           .optional()
           .describe('Also propose pinned tabs, tabs playing sound and snapshot-owned tabs. Only if the user explicitly asked for those tabs.'),
+        request: requestField,
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
-    ({ tabIds, includeProtected }) => runTool(send, 'proposeCloseTabs', { tabIds, includeProtected }),
+    ({ tabIds, includeProtected, request }) =>
+      runTool(send, 'proposeCloseTabs', { tabIds, includeProtected, request }),
   );
 
   server.registerTool(
@@ -592,10 +629,11 @@ export function createServer(send: Send): McpServer {
           .min(1)
           .max(MAX_PROPOSAL_TABS)
           .describe('Positions of the saved tabs to remove, from get_snapshot or search_tabs.'),
+        request: requestField,
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
-    ({ id, indexes }) => runTool(send, 'proposeRemoveFromSnapshot', { id, indexes }),
+    ({ id, indexes, request }) => runTool(send, 'proposeRemoveFromSnapshot', { id, indexes, request }),
   );
 
   server.registerTool(

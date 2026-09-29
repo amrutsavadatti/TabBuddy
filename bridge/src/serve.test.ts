@@ -200,6 +200,92 @@ describe('tools', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  // the tools that change something the user might later want to find in the activity log
+  const TAKES_REQUEST = [
+    'add_tabs_to_snapshot',
+    'create_snapshot_from_urls',
+    'open_urls',
+    'propose_archive_tabs',
+    'propose_close_tabs',
+    'propose_remove_from_snapshot',
+    'rename_snapshot',
+    'restore_snapshot',
+    'save_window',
+    'tag_snapshots',
+    'update_snapshot_from_window',
+  ];
+
+  it('offers a request phrase on the tools that change things, and on no others', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const withRequest = tools.filter((t) => 'request' in (t.inputSchema.properties ?? {})).map((t) => t.name);
+    expect(withRequest.sort()).toEqual([...TAKES_REQUEST].sort());
+    const schema = tools.find((t) => t.name === 'rename_snapshot')!.inputSchema.properties!.request as {
+      type: string;
+      maxLength: number;
+      description: string;
+    };
+    expect(schema.type).toBe('string');
+    expect(schema.maxLength).toBe(120);
+    expect(schema.description).toContain('activity log');
+    expect(schema.description).toContain('same phrase');
+    // never required: an agent that forgets must not have its action refused
+    for (const tool of tools) expect(tool.inputSchema.required ?? []).not.toContain('request');
+  });
+
+  it('forwards the request phrase with each tool call', async () => {
+    const send = vi.fn(async () => ({ ok: true }));
+    const client = await connect(send);
+    const request = 'clean up my Job Hunt window';
+    const calls: [string, Record<string, unknown>, string][] = [
+      ['restore_snapshot', { id: 's1' }, 'restoreSnapshot'],
+      ['open_urls', { urls: ['https://a.test/'] }, 'openUrls'],
+      ['save_window', { name: 'Research' }, 'saveWindow'],
+      ['create_snapshot_from_urls', { name: 'R', urls: ['https://a.test/'] }, 'createSnapshotFromUrls'],
+      ['update_snapshot_from_window', { id: 's1' }, 'updateSnapshotFromWindow'],
+      ['rename_snapshot', { id: 's1', name: 'New' }, 'renameSnapshot'],
+      ['tag_snapshots', { snapshotIds: ['s1'], categoryNames: ['Work'] }, 'tagSnapshots'],
+      ['add_tabs_to_snapshot', { id: 's1', urls: ['https://a.test/'] }, 'addTabsToSnapshot'],
+      ['propose_archive_tabs', { tabIds: [1] }, 'proposeArchiveTabs'],
+      ['propose_close_tabs', { tabIds: [1] }, 'proposeCloseTabs'],
+      ['propose_remove_from_snapshot', { id: 's1', indexes: [0] }, 'proposeRemoveFromSnapshot'],
+    ];
+    expect(calls.map(([name]) => name).sort()).toEqual([...TAKES_REQUEST].sort());
+    for (const [name, args, method] of calls) {
+      await client.callTool({ name, arguments: { ...args, request } });
+      expect(send).toHaveBeenLastCalledWith(method, expect.objectContaining({ request }));
+    }
+  });
+
+  it('works exactly as before when no request phrase is given', async () => {
+    const send = vi.fn(async () => ({ ok: true }));
+    const client = await connect(send);
+    const result = await client.callTool({ name: 'rename_snapshot', arguments: { id: 's1', name: 'New' } });
+    expect(result.isError).toBeUndefined();
+    expect(send).toHaveBeenLastCalledWith('renameSnapshot', { id: 's1', name: 'New' });
+  });
+
+  it('refuses a request phrase that is too long or not text, without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    for (const request of ['x'.repeat(121), 42, ['a']]) {
+      const result = await client
+        .callTool({ name: 'rename_snapshot', arguments: { id: 's1', name: 'New', request } })
+        .catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('tells the model, when it connects, to pass the same request phrase on every call', async () => {
+    const client = await connect(async () => null);
+    const instructions = client.getInstructions()!;
+    expect(instructions).toContain('activity log');
+    expect(instructions).toContain('`request` phrase');
+    expect(instructions).toContain('every');
+    expect(instructions).toContain('Ask before closing, archiving or removing');
+  });
+
   it('forwards propose and confirm arguments', async () => {
     const send = vi.fn(async () => ({ ok: true }));
     const client = await connect(send);

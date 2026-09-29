@@ -92,7 +92,7 @@ export async function undoActivity(undoId: unknown): Promise<UndoResult> {
 
   await markUndone(entry.id);
   try {
-    await recordActivity({ tool: 'undo', summary: `Undid: ${entry.summary}` });
+    await recordActivity({ tool: 'undo', summary: `Undid: ${entry.summary}`, request: entry.request });
   } catch {
     // the undo itself worked; failing to log it must not hide that
   }

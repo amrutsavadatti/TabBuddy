@@ -30,6 +30,7 @@ import {
 } from '../bridge/protocol';
 import { listActivity, recordActivity } from './activityLog';
 import { focusTab, openUrls, parseOpenUrlsParams, parseTabId } from './agentOpen';
+import { parseRequest } from './agentRequest';
 import {
   confirmProposal,
   proposeArchiveTabs,
@@ -407,7 +408,9 @@ function withActivityLog(table: HandlerTable): HandlerTable {
           const result = await handler(params);
           try {
             const summary = spec.summary(result);
-            if (summary !== null) await recordActivity({ tool: spec.tool, summary });
+            if (summary !== null) {
+              await recordActivity({ tool: spec.tool, summary, request: parseRequest(params) });
+            }
           } catch {
             // never let the log turn a success into a failure
           }

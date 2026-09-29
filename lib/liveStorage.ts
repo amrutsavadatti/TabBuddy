@@ -1,3 +1,4 @@
+import { ACTIVITY_KEY } from './activityLog';
 import { AGENT_BRIDGE_ENABLED_KEY } from './agentBridgeSettings';
 import { CATEGORIES_KEY } from './categories';
 import { LAZY_RESTORE_KEY } from './lazyRestore';
@@ -26,6 +27,9 @@ export interface LiveChange {
   quickLinkSlots?: QuickLinkSlots;
   /** True when any dashboard setting changed and should be re-read. */
   settings: boolean;
+  /** True when the agent activity log changed. It is re-read rather than taken
+   * from the event, because the stored entries also hold the data undo needs. */
+  activity: boolean;
 }
 
 /** Turns a `storage.onChanged` event into what the open dashboard should
@@ -37,7 +41,10 @@ export function interpretStorageChange(
 ): LiveChange | null {
   if (area !== 'local') return null;
 
-  const result: LiveChange = { settings: SETTINGS_KEYS.some((key) => key in changes) };
+  const result: LiveChange = {
+    settings: SETTINGS_KEYS.some((key) => key in changes),
+    activity: ACTIVITY_KEY in changes,
+  };
   if (SNAPSHOTS_KEY in changes) {
     result.snapshots = normalizeSnapshots(changes[SNAPSHOTS_KEY]!.newValue);
   }
@@ -59,7 +66,8 @@ export function interpretStorageChange(
     result.categories ||
     result.siteStats ||
     result.quickLinkSlots ||
-    result.settings
+    result.settings ||
+    result.activity
     ? result
     : null;
 }

@@ -693,7 +693,7 @@ asks for large batches.
 
 **Commit:** `feat(bridge): log agent activity and undo confirmed actions`
 
-### 🔲 Slice X3b — Dashboard: the Agent activity panel and toasts
+### ✅ Slice X3b — Dashboard: the Agent activity panel and toasts
 **Build:**
 - An "Agent activity" panel in the dashboard listing the log, newest first,
   with an Undo button on each entry that can still be undone. Undo runs in the
@@ -704,6 +704,15 @@ asks for large batches.
   call.)*
 - The panel is reached from a temporary chip in the settings bar; slice S1
   gives it its proper place in the Agent bridge section.
+- *(Added while building: the log is sorted by what the user asked for. Every
+  tool that changes something takes an optional `request` phrase, and the server
+  instructions tell the model to pass the same phrase on every call for one
+  request. A proposal remembers its phrase so the confirmed action lands in the
+  same group, and an undo takes its original's. The panel groups entries with the
+  same phrase that follow each other within an hour, and entries with no phrase
+  into bursts within fifteen minutes under "No request noted".)*
+- *(Open: how long the log is kept. Today entries have no age limit, only the
+  newest 100, and undo data is kept for the 20 most recent undoable entries.)*
 
 **Test:**
 - Unit tests for turning log changes into toasts and for the panel's state;

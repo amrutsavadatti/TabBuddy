@@ -13,6 +13,8 @@ export interface TabProposal extends ProposalBase {
   tabs: ProposalTab[];
   /** The proposal deliberately included pinned, playing or snapshot-owned tabs. */
   includeProtected: boolean;
+  /** What the user asked for, as the agent phrased it, carried through to the activity log. */
+  request?: string;
 }
 
 /** Remove saved tabs from a snapshot, by position. */
@@ -23,6 +25,7 @@ export interface RemoveFromSnapshotProposal extends ProposalBase {
   /** The snapshot's updatedAt when proposed: if it differs at confirm time, positions can't be trusted. */
   snapshotUpdatedAt: number;
   entries: { index: number; title: string; url: string }[];
+  request?: string;
 }
 
 export type Proposal = TabProposal | RemoveFromSnapshotProposal;

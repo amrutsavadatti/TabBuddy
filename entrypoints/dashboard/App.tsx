@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import dashboardIcon from '@/assets/dashboard-header-icon.png';
 import { TriageView } from './TriageView';
 import {
@@ -75,6 +75,11 @@ import {
   setNudgeIntervalMinutes,
   setNudgeStaleMinutes,
 } from '@/lib/nudgeSettings';
+import type { ActivityEntry } from '../../bridge/protocol';
+import { listActivity } from '@/lib/activityLog';
+import { describeUndoResult, newActivityToasts } from '@/lib/agentActivityView';
+import { undoActivity } from '@/lib/undo';
+import { AgentActivityDialog } from './AgentActivityDialog';
 import { NudgeSettingsDialog } from './NudgeSettingsDialog';
 import { SettingsBar } from './SettingsBar';
 import { HoverPeek } from './HoverPeek';
@@ -825,7 +830,39 @@ function App() {
   );
   const showToast = useToast();
 
+  // What an AI agent has done through TabBuddy. New entries that appear while
+  // the dashboard is open are announced with a toast; the first read is not news.
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [undoingId, setUndoingId] = useState<string | null>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
+  const knownActivityIds = useRef<Set<string> | null>(null);
+  const activityReadCount = useRef(0);
+
+  const refreshActivity = useCallback(async () => {
+    const read = ++activityReadCount.current;
+    const { entries } = await listActivity();
+    if (read !== activityReadCount.current) return; // a newer read has already answered
+    for (const message of newActivityToasts(knownActivityIds.current, entries)) showToast(message);
+    knownActivityIds.current = new Set([...(knownActivityIds.current ?? []), ...entries.map((e) => e.id)]);
+    setActivity(entries);
+  }, [showToast]);
+
+  const handleUndoActivity = async (id: string) => {
+    setUndoingId(id);
+    setUndoError(null);
+    try {
+      showToast(describeUndoResult(await undoActivity(id)));
+    } catch (error) {
+      setUndoError(error instanceof Error ? error.message : 'something went wrong');
+    } finally {
+      setUndoingId(null);
+      await refreshActivity();
+    }
+  };
+
   useEffect(() => {
+    refreshActivity();
     getSnapshots().then(setSnapshots);
     getStoredVibe().then((v) => {
       setVibe(v);
@@ -863,6 +900,7 @@ function App() {
       if (change.categories) setCategories(change.categories);
       if (change.siteStats) setSiteStats(change.siteStats);
       if (change.quickLinkSlots) setQuickSlots(change.quickLinkSlots);
+      if (change.activity) refreshActivity();
       if (change.settings) {
         getHoverPeekEnabled().then(setHoverPeekEnabledState);
         getLazyRestoreEnabled().then(setLazyRestoreEnabledState);
@@ -1391,6 +1429,11 @@ function App() {
         onToggleLazyRestore={toggleLazyRestore}
         agentBridgeEnabled={agentBridgeEnabled}
         onToggleAgentBridge={toggleAgentBridge}
+        agentUndoableCount={activity.filter((entry) => entry.undoable).length}
+        onOpenAgentActivity={() => {
+          setUndoError(null);
+          setActivityOpen(true);
+        }}
         nudgeEnabled={nudgeEnabled}
         nudgeIntervalMinutes={nudgeIntervalMinutes}
         onOpenNudgeSettings={() => setNudgeDialogOpen(true)}
@@ -1406,6 +1449,14 @@ function App() {
         }}
         onImportFile={handleImportFile}
         onOpenTutorial={() => setOnboardingOpen(true)}
+      />
+      <AgentActivityDialog
+        open={activityOpen}
+        onOpenChange={setActivityOpen}
+        entries={activity}
+        busyId={undoingId}
+        error={undoError}
+        onUndo={handleUndoActivity}
       />
       <NudgeSettingsDialog
         open={nudgeDialogOpen}

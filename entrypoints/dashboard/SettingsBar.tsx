@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   HelpCircle,
+  History,
   Leaf,
   Bot,
   Link2,
@@ -127,6 +128,8 @@ export function SettingsBar({
   onToggleLazyRestore,
   agentBridgeEnabled,
   onToggleAgentBridge,
+  agentUndoableCount,
+  onOpenAgentActivity,
   nudgeEnabled,
   nudgeIntervalMinutes,
   onOpenNudgeSettings,
@@ -148,6 +151,9 @@ export function SettingsBar({
   onToggleLazyRestore: () => void;
   agentBridgeEnabled: boolean;
   onToggleAgentBridge: () => void;
+  /** How many agent actions can still be undone. */
+  agentUndoableCount: number;
+  onOpenAgentActivity: () => void;
   nudgeEnabled: boolean;
   nudgeIntervalMinutes: number;
   onOpenNudgeSettings: () => void;
@@ -246,6 +252,13 @@ export function SettingsBar({
             active={agentBridgeEnabled}
             title="Let an AI agent (through the tabbuddy-bridge MCP server) use TabBuddy. Off by default"
             onClick={onToggleAgentBridge}
+          />
+          <Chip
+            icon={<History size={15} />}
+            label="Agent activity"
+            state={agentUndoableCount > 0 ? `${agentUndoableCount} to undo` : undefined}
+            title="See what an AI agent has done through TabBuddy, and undo it"
+            onClick={onOpenAgentActivity}
           />
           </GroupPanel>
 

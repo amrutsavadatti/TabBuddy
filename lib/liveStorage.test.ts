@@ -26,6 +26,20 @@ describe('interpretStorageChange', () => {
     expect(interpretStorageChange({ agentBridgeEnabled: { newValue: true } }, 'local')?.settings).toBe(true);
   });
 
+  it('flags a change to the agent activity log, without passing its contents on', () => {
+    const result = interpretStorageChange(
+      { agentActivity: { newValue: [{ id: 'a', undo: { kind: 'close', tabs: [{ url: 'https://secret.test/' }] } }] } },
+      'local',
+    );
+    expect(result?.activity).toBe(true);
+    expect(result?.settings).toBe(false);
+    expect(JSON.stringify(result)).not.toContain('secret.test'); // the stored undo data is never handed to the page
+  });
+
+  it('does not flag activity for other changes', () => {
+    expect(interpretStorageChange({ agentBridgeEnabled: { newValue: true } }, 'local')?.activity).toBe(false);
+  });
+
   it('treats a removed snapshots key as an empty list', () => {
     expect(interpretStorageChange({ snapshots: {} }, 'local')?.snapshots).toEqual([]);
   });

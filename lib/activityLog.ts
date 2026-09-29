@@ -31,6 +31,8 @@ export type UndoPayload =
 
 export interface StoredActivity {
   id: string;
+  /** What the user asked the agent to do, as the agent phrased it. */
+  request?: string;
   at: number;
   tool: string;
   summary: string;
@@ -38,7 +40,8 @@ export interface StoredActivity {
   undone: boolean;
 }
 
-const ACTIVITY_KEY = 'agentActivity';
+/** The storage key the dashboard watches to show new activity as it happens. */
+export const ACTIVITY_KEY = 'agentActivity';
 /** A favicon bigger than this is not kept in undo data: it is only cosmetic. */
 const MAX_KEPT_FAVICON = 4000;
 
@@ -64,6 +67,7 @@ async function write(entries: StoredActivity[]): Promise<void> {
 function toEntry(stored: StoredActivity): ActivityEntry {
   return {
     id: stored.id,
+    ...(stored.request === undefined ? {} : { request: stored.request }),
     at: stored.at,
     tool: stored.tool,
     summary: stored.summary,
@@ -77,11 +81,12 @@ function toEntry(stored: StoredActivity): ActivityEntry {
  * cannot grow to crowd out the user's snapshots. Returns the entry's id, which
  * is also its undoId. */
 export async function recordActivity(
-  input: { tool: string; summary: string; undo?: UndoPayload },
+  input: { tool: string; summary: string; undo?: UndoPayload; request?: string },
   now: number = Date.now(),
 ): Promise<string> {
   const entry: StoredActivity = {
     id: crypto.randomUUID(),
+    ...(input.request === undefined ? {} : { request: input.request }),
     at: now,
     tool: input.tool,
     summary: input.summary,

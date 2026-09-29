@@ -579,9 +579,14 @@ export const MAX_ACTIVITY_ENTRIES = 100;
 /** Only this many of the most recent undoable actions keep what undo needs. */
 export const MAX_UNDOABLE_ENTRIES = 20;
 
+/** Longest `request` phrase the log keeps. */
+export const MAX_REQUEST_LENGTH = 120;
+
 export interface ActivityEntry {
   /** Also the undoId, for an entry that can be undone. */
   id: string;
+  /** What the user asked the agent to do, in the agent's short phrase; groups related actions. */
+  request?: string;
   /** When it happened (ms since epoch). */
   at: number;
   /** The tool that did it, e.g. "confirm_proposal". */

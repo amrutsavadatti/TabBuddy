@@ -9,6 +9,7 @@ import {
   type SnapshotEditProposalResult,
 } from '../bridge/protocol';
 import { recordActivity, slimTab, type ClosedTab, type UndoPayload } from './activityLog';
+import { parseRequest } from './agentRequest';
 import { archiveTabs } from './archive';
 import { BridgeFailure } from './bridgeFailure';
 import { resolveLazyTab } from './lazyTab';
@@ -26,9 +27,9 @@ type LiveTab = TriageTab & { rawUrl: string; windowId: number };
 /** Writes the activity entry for a confirmed action. The action has already
  * happened, so a failure to log it must not turn into a failure to report it:
  * undoId is then null. */
-async function record(summary: string, undo: UndoPayload): Promise<string | null> {
+async function record(summary: string, undo: UndoPayload, request?: string): Promise<string | null> {
   try {
-    return await recordActivity({ tool: 'confirm_proposal', summary, undo });
+    return await recordActivity({ tool: 'confirm_proposal', summary, undo, request });
   } catch {
     return null;
   }
@@ -144,7 +145,7 @@ async function proposeTabs(action: 'archive' | 'close', params: unknown): Promis
     );
   }
 
-  const proposal = await createProposal({ kind: action, tabs, includeProtected });
+  const proposal = await createProposal({ kind: action, tabs, includeProtected, request: parseRequest(params) });
   const many = tabs.length !== 1;
   return {
     proposalId: proposal.id,
@@ -223,6 +224,7 @@ export async function proposeRemoveFromSnapshot(params: unknown): Promise<Snapsh
     snapshotName: snapshot.name,
     snapshotUpdatedAt: snapshot.updatedAt,
     entries,
+    request: parseRequest(params),
   });
   const left = snapshot.tabs.length - entries.length;
   return {
@@ -318,6 +320,7 @@ async function confirmRemoveFromSnapshot(proposal: RemoveFromSnapshotProposal): 
   const undoId = await record(
     `Removed ${plural(removed.length, 'saved tab', 'saved tabs')} from "${snapshot.name}"`,
     { kind: 'removeFromSnapshot', snapshotId: snapshot.id, snapshotName: snapshot.name, snapshotUpdatedAfter: updatedAt, removed },
+    proposal.request,
   );
   return {
     action: 'removeFromSnapshot',
@@ -347,7 +350,7 @@ export async function confirmProposal(params: unknown): Promise<ConfirmProposalR
       kind: 'archive',
       archivedSnapshotId: done.snapshotId,
       tabs: live.map(asClosed),
-    });
+    }, proposal.request);
     return {
       action: 'archive',
       undoId,
@@ -369,6 +372,6 @@ export async function confirmProposal(params: unknown): Promise<ConfirmProposalR
   const undoId = await record(`Closed ${plural(closedTabs.length, 'tab', 'tabs')}`, {
     kind: 'close',
     tabs: closedTabs.map(asClosed),
-  });
+  }, proposal.request);
   return { action: 'close', undoId, closed: closedTabs.length };
 }
