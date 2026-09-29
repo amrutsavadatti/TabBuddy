@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   BACKOFF_MAX_MS,
   createBridgeConnection,
+  createRetryTimers,
+  MIN_ALARM_DELAY_MS,
+  RETRY_ALARM_NAME,
   nextBackoffMs,
   type ConnectionDeps,
   type NativePort,
@@ -217,5 +220,65 @@ describe('agent bridge setting', () => {
     expect(await getAgentBridgeEnabled()).toBe(false);
     await fakeBrowser.storage.local.set({ [AGENT_BRIDGE_ENABLED_KEY]: true });
     expect(await getAgentBridgeEnabled()).toBe(true);
+  });
+});
+
+describe('retry timers', () => {
+  function setupTimers() {
+    const calls = {
+      timeouts: [] as { ms: number }[],
+      clearedTimeouts: [] as unknown[],
+      alarms: [] as { name: string; when: number }[],
+      clearedAlarms: [] as string[],
+    };
+    const timers = createRetryTimers({
+      setTimeout: (_cb, ms) => {
+        calls.timeouts.push({ ms });
+        return `timeout-${calls.timeouts.length}`;
+      },
+      clearTimeout: (handle) => void calls.clearedTimeouts.push(handle),
+      createAlarm: (name, when) => void calls.alarms.push({ name, when }),
+      clearAlarm: (name) => void calls.clearedAlarms.push(name),
+      now: () => 1_000,
+    });
+    return { timers, calls };
+  }
+
+  it('uses a plain timeout for short waits', () => {
+    const { timers, calls } = setupTimers();
+    const handle = timers.setTimer(() => {}, MIN_ALARM_DELAY_MS - 1);
+    expect(calls.timeouts).toEqual([{ ms: MIN_ALARM_DELAY_MS - 1 }]);
+    expect(calls.alarms).toEqual([]);
+    timers.clearTimer(handle);
+    expect(calls.clearedTimeouts).toEqual([handle]);
+  });
+
+  it('uses an alarm for waits the worker might not survive', () => {
+    const { timers, calls } = setupTimers();
+    timers.setTimer(() => {}, 40_000);
+    expect(calls.timeouts).toEqual([]);
+    expect(calls.alarms).toEqual([{ name: RETRY_ALARM_NAME, when: 41_000 }]);
+  });
+
+  it('hands the pending callback to the alarm handler exactly once', () => {
+    const { timers } = setupTimers();
+    const callback = () => {};
+    timers.setTimer(callback, 60_000);
+    expect(timers.takeAlarmCallback(RETRY_ALARM_NAME)).toBe(callback);
+    expect(timers.takeAlarmCallback(RETRY_ALARM_NAME)).toBeNull();
+  });
+
+  it('returns null after a worker restart, and ignores other alarms', () => {
+    const { timers } = setupTimers();
+    expect(timers.takeAlarmCallback(RETRY_ALARM_NAME)).toBeNull();
+    expect(timers.takeAlarmCallback('tabbuddy-nudge-scan')).toBeUndefined();
+  });
+
+  it('clears the alarm when the retry is cancelled', () => {
+    const { timers, calls } = setupTimers();
+    const handle = timers.setTimer(() => {}, 80_000);
+    timers.clearTimer(handle);
+    expect(calls.clearedAlarms).toEqual([RETRY_ALARM_NAME]);
+    expect(timers.takeAlarmCallback(RETRY_ALARM_NAME)).toBeNull();
   });
 });
