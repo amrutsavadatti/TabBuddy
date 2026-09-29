@@ -1,0 +1,28 @@
+{
+  "name": "tabbuddy-bridge",
+  "description": "Native messaging host and MCP server that connects AI agents to the TabBuddy browser extension.",
+  "license": "MIT",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "tabbuddy-bridge": "dist/src/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

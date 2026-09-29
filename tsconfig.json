@@ -3,5 +3,8 @@
   "compilerOptions": {
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx"
-  }
+  },
+  // bridge/ is its own Node package with its own tsconfig and tests; only
+  // bridge/protocol.ts is shared with the extension (pulled in by import).
+  "exclude": ["node_modules", "**/node_modules", ".output", "bridge/src", "bridge/dist"]
 }
