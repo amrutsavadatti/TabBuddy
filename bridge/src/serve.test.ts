@@ -5,12 +5,13 @@ import { PassThrough } from 'node:stream';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PROTOCOL_VERSION } from '../protocol.js';
+import { CONFIRM_WAIT_MS, PROTOCOL_VERSION } from '../protocol.js';
 import { BridgeCallError, BrowserUnreachableError } from './client.js';
 import { encodeFrame, FrameDecoder } from './framing.js';
 import { startHost, type RunningHost } from './host.js';
 import {
   createServer,
+  METHOD_TIMEOUTS_MS,
   ProtocolMismatchError,
   SERVER_VERSION,
   socketSender,
@@ -855,6 +856,21 @@ describe('through a real host', () => {
     const result = await client.callTool({ name: 'list_snapshots', arguments: {} });
     expect(JSON.parse(textOf(result))).toEqual([{ id: 's1', name: 'Job Hunt', tabCount: 4 }]);
     expect(seen).toEqual(['hello', 'listSnapshots']);
+  });
+});
+
+describe('timeouts', () => {
+  it('lets confirm_proposal wait for a person, longer than the browser-side wait', () => {
+    expect(METHOD_TIMEOUTS_MS.confirmProposal).toBeGreaterThan(CONFIRM_WAIT_MS);
+    expect(Object.keys(METHOD_TIMEOUTS_MS)).toEqual(['confirmProposal']);
+  });
+
+  it('mentions the browser confirmation in the confirm_proposal description', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const description = tools.find((t) => t.name === 'confirm_proposal')!.description!;
+    expect(description).toContain('declined: true');
+    expect(description).toContain('NOTHING was changed');
   });
 });
 

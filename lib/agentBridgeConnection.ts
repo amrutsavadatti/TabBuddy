@@ -1,10 +1,18 @@
 import type { BridgeRequest, BridgeResponse } from '../bridge/protocol';
 import { dispatch } from './agentBridge';
 import { AGENT_BRIDGE_ENABLED_KEY, getAgentBridgeEnabled } from './agentBridgeSettings';
+import {
+  classifyDisconnect,
+  RECHECK_KEY,
+  writeBridgeStatus,
+  type BridgeState,
+} from './agentBridgeStatus';
 
 export const NATIVE_HOST_NAME = 'com.tabbuddy.bridge';
 export const BACKOFF_BASE_MS = 5_000;
 export const BACKOFF_MAX_MS = 10 * 60_000;
+/** A port that is still open after this long is taken to be talking to a real host. */
+export const SETTLE_MS = 1_500;
 
 /** Retry delay after `attempt` failed connections in a row (0 = the first
  * retry): 5s, 10s, 20s ... capped at 10 minutes. */
@@ -31,6 +39,8 @@ export interface ConnectionDeps {
    * Chrome prints "Unchecked runtime.lastError" unless this is read. */
   takeLastError: () => string | undefined;
   log: (message: string) => void;
+  /** Tells whoever shows the bridge's status what state the connection is in. */
+  report: (state: BridgeState, detail?: string) => void;
 }
 
 export interface BridgeConnection {
@@ -38,6 +48,8 @@ export interface BridgeConnection {
    * connects when both allow it, and disconnects (and stops retrying) when
    * either is gone. Safe to call as often as you like. */
   sync(): Promise<void>;
+  /** Tries again now, without waiting for the next retry. Does nothing while connected. */
+  recheck(): Promise<void>;
 }
 
 export function createBridgeConnection(deps: ConnectionDeps): BridgeConnection {
@@ -45,13 +57,20 @@ export function createBridgeConnection(deps: ConnectionDeps): BridgeConnection {
   let retryTimer: unknown = null;
   let failures = 0;
   let queue: Promise<void> = Promise.resolve();
+  let settleTimer: unknown = null;
+
+  const clearSettle = () => {
+    if (settleTimer !== null) deps.clearTimer(settleTimer);
+    settleTimer = null;
+  };
 
   const clearRetry = () => {
     if (retryTimer !== null) deps.clearTimer(retryTimer);
     retryTimer = null;
   };
 
-  const scheduleRetry = (reason: string) => {
+  const scheduleRetry = (reason: string, state: 'not_installed' | 'error', detail: string) => {
+    deps.report(state, detail);
     const delay = nextBackoffMs(failures);
     failures += 1;
     deps.log(`${reason}; retrying in ${Math.round(delay / 1000)}s`);
@@ -70,27 +89,45 @@ export function createBridgeConnection(deps: ConnectionDeps): BridgeConnection {
       // e.g. connectNative isn't available yet right after the permission is
       // granted. Treat it like any other failed attempt.
       const detail = error instanceof Error ? error.message : String(error);
-      scheduleRetry(`Agent bridge could not connect (${detail})`);
+      scheduleRetry(`Agent bridge could not connect (${detail})`, 'error', `Could not start the bridge connection (${detail}).`);
       return;
     }
     port = opened;
+    deps.report('connecting');
+    // A missing host makes the browser close the port at once. One that is
+    // still open a moment later is a live host.
+    settleTimer = deps.setTimer(() => {
+      settleTimer = null;
+      if (port === opened) deps.report('connected');
+    }, SETTLE_MS);
     opened.onMessage.addListener(async (message) => {
       failures = 0; // the host answered, so the link works
+      clearSettle();
+      deps.report('connected');
       opened.postMessage(await deps.handle(message as BridgeRequest));
     });
     opened.onDisconnect.addListener(() => {
       if (port !== opened) return; // we closed it ourselves
       port = null;
+      clearSettle();
       const reason = deps.takeLastError();
-      scheduleRetry(reason ? `Agent bridge disconnected (${reason})` : 'Agent bridge disconnected');
+      const { state, detail } = classifyDisconnect(reason);
+      scheduleRetry(reason ? `Agent bridge disconnected (${reason})` : 'Agent bridge disconnected', state, detail);
     });
   };
 
   const run = async () => {
-    const shouldRun = (await deps.isEnabled()) && (await deps.hasPermission());
+    const enabled = await deps.isEnabled();
+    const shouldRun = enabled && (await deps.hasPermission());
     if (!shouldRun) {
       clearRetry();
+      clearSettle();
       failures = 0;
+      if (enabled) {
+        deps.report('error', 'TabBuddy no longer has the native messaging permission. Turn the bridge off and on again.');
+      } else {
+        deps.report('off');
+      }
       if (port) {
         const closing = port;
         port = null;
@@ -106,6 +143,16 @@ export function createBridgeConnection(deps: ConnectionDeps): BridgeConnection {
     // Serialised: two overlapping syncs must not both open a port.
     sync() {
       queue = queue.then(run, run);
+      return queue;
+    },
+    recheck() {
+      const again = async () => {
+        if (port) return;
+        clearRetry();
+        failures = 0;
+        await run();
+      };
+      queue = queue.then(again, again);
       return queue;
     },
   };
@@ -177,6 +224,9 @@ export function startAgentBridge(): void {
     clearTimer: timers.clearTimer,
     takeLastError: () => browser.runtime.lastError?.message,
     log: (message) => console.info(`[TabBuddy] ${message}`),
+    report: (state, detail) => {
+      writeBridgeStatus(state, detail).catch(() => {});
+    },
   });
   const sync = () => {
     connection.sync().catch((error) => console.warn('[TabBuddy] Agent bridge sync failed', error));
@@ -185,6 +235,9 @@ export function startAgentBridge(): void {
   sync();
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && AGENT_BRIDGE_ENABLED_KEY in changes) sync();
+    if (areaName === 'session' && RECHECK_KEY in changes) {
+      connection.recheck().catch((error) => console.warn('[TabBuddy] Agent bridge recheck failed', error));
+    }
   });
   browser.permissions.onAdded.addListener(sync);
   browser.permissions.onRemoved.addListener(sync);

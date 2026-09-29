@@ -4,6 +4,7 @@ import {
   createBridgeConnection,
   createRetryTimers,
   MIN_ALARM_DELAY_MS,
+  SETTLE_MS,
   RETRY_ALARM_NAME,
   nextBackoffMs,
   type ConnectionDeps,
@@ -42,6 +43,9 @@ function setup(initial: { enabled?: boolean; permission?: boolean } = {}) {
   };
   const ports: FakePort[] = [];
   const timers = new Map<number, { callback: () => void; ms: number }>();
+  // the short "is the host really there?" timer is kept apart from retry timers
+  const settleTimers = new Map<number, { callback: () => void; ms: number }>();
+  const reports: { state: string; detail?: string }[] = [];
   let nextTimer = 1;
   const deps: ConnectionDeps = {
     isEnabled: async () => state.enabled,
@@ -54,12 +58,16 @@ function setup(initial: { enabled?: boolean; permission?: boolean } = {}) {
     handle: async (request) => ({ id: request.id, result: 'ok' }),
     setTimer: (callback, ms) => {
       const handle = nextTimer++;
-      timers.set(handle, { callback, ms });
+      (ms === SETTLE_MS ? settleTimers : timers).set(handle, { callback, ms });
       return handle;
     },
-    clearTimer: (handle) => void timers.delete(handle as number),
+    clearTimer: (handle) => {
+      timers.delete(handle as number);
+      settleTimers.delete(handle as number);
+    },
     takeLastError: () => state.lastError,
     log: vi.fn(),
+    report: (state, detail) => void reports.push({ state, ...(detail ? { detail } : {}) }),
   };
   const connection = createBridgeConnection(deps);
   const fireTimer = () => {
@@ -67,7 +75,12 @@ function setup(initial: { enabled?: boolean; permission?: boolean } = {}) {
     timers.delete(handle);
     timer.callback();
   };
-  return { state, ports, timers, deps, connection, fireTimer };
+  const settle = () => {
+    const [handle, timer] = [...settleTimers.entries()][0]!;
+    settleTimers.delete(handle);
+    timer.callback();
+  };
+  return { state, ports, timers, settleTimers, reports, deps, connection, fireTimer, settle };
 }
 
 describe('nextBackoffMs', () => {
@@ -212,6 +225,115 @@ describe('bridge connection', () => {
     state.permission = false;
     await connection.sync();
     expect(ports[0]!.disconnected).toBe(true);
+  });
+});
+
+describe('bridge status reports', () => {
+  const last = (reports: { state: string }[]) => reports[reports.length - 1]!.state;
+
+  it('reports off while the bridge is off', async () => {
+    const { connection, reports } = setup({ enabled: false });
+    await connection.sync();
+    expect(reports).toEqual([{ state: 'off' }]);
+  });
+
+  it('reports an error when it is on but the permission is gone', async () => {
+    const { connection, reports } = setup({ permission: false });
+    await connection.sync();
+    expect(reports[0]!.state).toBe('error');
+    expect(reports[0]!.detail).toContain('permission');
+  });
+
+  it('is connecting at first, and connected once the port has stayed open a moment', async () => {
+    const { connection, reports, settle } = setup();
+    await connection.sync();
+    expect(last(reports)).toBe('connecting');
+    settle();
+    expect(last(reports)).toBe('connected');
+  });
+
+  it('is connected at once when the host sends a request', async () => {
+    const { connection, ports, reports, settleTimers } = setup();
+    await connection.sync();
+    await ports[0]!.receive({ id: 'r1', method: 'hello' });
+    expect(last(reports)).toBe('connected');
+    expect(settleTimers.size).toBe(0);
+  });
+
+  it('says the bridge is not installed when the browser cannot find the host', async () => {
+    const { connection, ports, state, reports } = setup();
+    await connection.sync();
+    state.lastError = 'Specified native messaging host not found.';
+    ports[0]!.drop();
+    expect(reports[reports.length - 1]).toMatchObject({ state: 'not_installed' });
+  });
+
+  it('does not call a port that closed at once connected', async () => {
+    const { connection, ports, reports, settleTimers } = setup();
+    await connection.sync();
+    ports[0]!.drop();
+    expect(settleTimers.size).toBe(0);
+    expect(reports.map((r) => r.state)).not.toContain('connected');
+  });
+
+  it('reports an error for a host that exits or is forbidden', async () => {
+    const { connection, ports, state, reports } = setup();
+    await connection.sync();
+    state.lastError = 'Access to the specified native messaging host is forbidden.';
+    ports[0]!.drop();
+    expect(reports[reports.length - 1]).toMatchObject({ state: 'error' });
+  });
+
+  it('reports an error when connecting throws', async () => {
+    const { connection, deps, reports } = setup();
+    deps.connect = () => {
+      throw new TypeError('connectNative is not a function');
+    };
+    await connection.sync();
+    expect(reports[reports.length - 1]).toMatchObject({ state: 'error' });
+  });
+
+  it('reports off when switched off, and never connected after that', async () => {
+    const { connection, state, reports, settle } = setup();
+    await connection.sync();
+    state.enabled = false;
+    await connection.sync();
+    expect(last(reports)).toBe('off');
+    expect(() => settle()).toThrow(); // its timer was cleared
+  });
+
+  it('recheck tries again straight away instead of waiting for the backoff', async () => {
+    const { connection, ports, state, timers } = setup();
+    await connection.sync();
+    state.lastError = 'Specified native messaging host not found.';
+    ports[0]!.drop();
+    expect(timers.size).toBe(1);
+
+    await connection.recheck();
+    expect(ports).toHaveLength(2);
+    expect(timers.size).toBe(0); // the pending retry was cancelled
+  });
+
+  it('recheck does nothing while a port is open', async () => {
+    const { connection, ports } = setup();
+    await connection.sync();
+    await connection.recheck();
+    expect(ports).toHaveLength(1);
+  });
+
+  it('recheck starts the backoff over', async () => {
+    const { connection, ports, timers, fireTimer } = setup();
+    await connection.sync();
+    for (let i = 0; i < 3; i++) {
+      ports[ports.length - 1]!.drop();
+      fireTimer();
+      await vi.waitFor(() => expect(ports).toHaveLength(i + 2));
+    }
+    ports[ports.length - 1]!.drop();
+    expect([...timers.values()][0]!.ms).toBe(40_000);
+    await connection.recheck();
+    ports[ports.length - 1]!.drop();
+    expect([...timers.values()].map((t) => t.ms)).toEqual([5_000]);
   });
 });
 

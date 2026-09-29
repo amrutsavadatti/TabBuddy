@@ -102,3 +102,9 @@ export async function takeProposal(id: string, now: number = Date.now()): Promis
   }
   return proposal;
 }
+
+/** Reads a proposal without using it up. Null if it is unknown, used or expired. */
+export async function peekProposal(id: string, now: number = Date.now()): Promise<Proposal | null> {
+  const proposal = (await read())[id];
+  return proposal && proposal.expiresAt > now ? proposal : null;
+}

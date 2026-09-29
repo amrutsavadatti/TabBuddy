@@ -571,6 +571,17 @@ export interface ConfirmRemoveFromSnapshotResult {
   snapshot: { id: string; name: string; tabCount: number };
 }
 
+/** How long confirm_proposal waits for the user when they asked to be asked in the browser. */
+export const CONFIRM_WAIT_MS = 2 * 60_000;
+
+/** The user, in the browser, said no (or did not answer in time). Nothing was changed and the proposal is used up. */
+export interface ConfirmDeclinedResult {
+  action: 'declined';
+  declined: true;
+  reason: 'cancelled' | 'timeout';
+  message: string;
+}
+
 export type ConfirmProposalResult =
   | ConfirmArchiveResult
   | ConfirmCloseResult

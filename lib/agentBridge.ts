@@ -33,8 +33,8 @@ import { focusTab, openUrls, parseOpenUrlsParams, parseTabId } from './agentOpen
 import { parseRequest } from './agentRequest';
 import { startManualTriage } from './agentManualTriage';
 import { proposeTriagePlan } from './agentTriage';
+import { confirmProposalWithUser } from './agentConfirmation';
 import {
-  confirmProposal,
   proposeArchiveTabs,
   proposeCloseTabs,
   proposeRemoveFromSnapshot,
@@ -285,7 +285,7 @@ const rawHandlers: HandlerTable = {
   proposeTriagePlan: (params) => proposeTriagePlan(params),
   startManualTriage: (params) => startManualTriage(params),
   proposeRemoveFromSnapshot: (params) => proposeRemoveFromSnapshot(params),
-  confirmProposal: (params) => confirmProposal(params),
+  confirmProposal: (params) => confirmProposalWithUser(params),
   updateSnapshotFromWindow: (params) => updateSnapshotFromWindow(params),
   renameSnapshot: (params) => renameSnapshotTo(params),
   tagSnapshots: (params) => tagSnapshots(params),

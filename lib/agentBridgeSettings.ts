@@ -19,3 +19,16 @@ export async function enableAgentBridge(): Promise<boolean> {
   await setAgentBridgeEnabled(true);
   return true;
 }
+
+export const ASK_IN_BROWSER_KEY = 'agentBridgeAskInBrowser';
+
+/** Off by default. When on, an agent's confirm_proposal opens a TabBuddy
+ * window and waits for the user to click Confirm before closing or archiving. */
+export async function getAskInBrowser(): Promise<boolean> {
+  const result = await browser.storage.local.get(ASK_IN_BROWSER_KEY);
+  return result[ASK_IN_BROWSER_KEY] === true;
+}
+
+export async function setAskInBrowser(enabled: boolean): Promise<void> {
+  await browser.storage.local.set({ [ASK_IN_BROWSER_KEY]: enabled });
+}

@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import {
+  CONFIRM_WAIT_MS,
   MAX_ADD_TABS,
   MAX_REQUEST_LENGTH,
   MAX_PROPOSAL_TABS,
@@ -66,8 +67,16 @@ export function withHandshake(send: Send): Send {
   };
 }
 
+/** Calls that may wait on a person: with "ask me in the browser" on,
+ * confirm_proposal waits up to CONFIRM_WAIT_MS for a click, so it gets that
+ * long plus room to carry the action out. */
+export const METHOD_TIMEOUTS_MS: Record<string, number> = {
+  confirmProposal: CONFIRM_WAIT_MS + 30_000,
+};
+
 export function socketSender(path: string = socketPath()): Send {
-  return (method, params) => callBridge(method, params, { socketPath: path });
+  return (method, params) =>
+    callBridge(method, params, { socketPath: path, timeoutMs: METHOD_TIMEOUTS_MS[method] });
 }
 
 function textResult(text: string, isError = false) {
@@ -719,7 +728,10 @@ export function createServer(send: Send): McpServer {
         'snapshot (find them with search_tabs, scope archived), and the user can reopen them from it in ' +
         'the TabBuddy dashboard. Closed tabs are not saved anywhere, and removed saved tabs are gone, ' +
         'but the result includes an undoId: tell the user the action can be undone, and call undo with ' +
-        'it if they ask.',
+        'it if they ask. If the user turned on "ask me in the browser", a TabBuddy window opens and this ' +
+        'call waits (up to 2 minutes) for them to click Confirm or Cancel: tell the user to look at their ' +
+        'browser. If they cancel or do not answer, you get declined: true and NOTHING was changed; the ' +
+        'proposal is used up, so do not retry unless the user asks, and propose again if they do.',
       inputSchema: {
         proposalId: z.string().min(1).describe('The proposalId returned by a propose_ tool.'),
       },

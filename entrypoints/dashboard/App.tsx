@@ -81,6 +81,7 @@ import { describeUndoResult, newActivityToasts } from '@/lib/agentActivityView';
 import { parseTriageTabsParam, TRIAGE_TABS_PARAM } from '@/lib/manualTriage';
 import { undoActivity } from '@/lib/undo';
 import { AgentActivityDialog } from './AgentActivityDialog';
+import { AgentBridgeDialog } from './AgentBridgeDialog';
 import { NudgeSettingsDialog } from './NudgeSettingsDialog';
 import { SettingsBar } from './SettingsBar';
 import { HoverPeek } from './HoverPeek';
@@ -100,8 +101,17 @@ import { getQuickLinksEnabled, setQuickLinksEnabled } from '@/lib/quickLinksSett
 import {
   enableAgentBridge,
   getAgentBridgeEnabled,
+  getAskInBrowser,
   setAgentBridgeEnabled,
+  setAskInBrowser,
 } from '@/lib/agentBridgeSettings';
+import {
+  describeStatus,
+  onBridgeStatusChanged,
+  readBridgeStatus,
+  requestRecheck,
+  type BridgeStatus,
+} from '@/lib/agentBridgeStatus';
 import {
   chosenDomains,
   getQuickLinkSlots,
@@ -805,6 +815,9 @@ function App() {
   const [lazyRestoreEnabled, setLazyRestoreEnabledState] = useState(true);
   const [quickLinksEnabled, setQuickLinksEnabledState] = useState(true);
   const [agentBridgeEnabled, setAgentBridgeEnabledState] = useState(false);
+  const [agentBridgeStatus, setAgentBridgeStatus] = useState<BridgeStatus | null>(null);
+  const [askInBrowser, setAskInBrowserState] = useState(false);
+  const [agentBridgeDialogOpen, setAgentBridgeDialogOpen] = useState(false);
   const [nudgeEnabled, setNudgeEnabledState] = useState(true);
   const [nudgeIntervalMinutes, setNudgeIntervalMinutesState] = useState(
     DEFAULT_NUDGE_INTERVAL_MINUTES,
@@ -881,6 +894,8 @@ function App() {
     getLazyRestoreEnabled().then(setLazyRestoreEnabledState);
     getQuickLinksEnabled().then(setQuickLinksEnabledState);
     getAgentBridgeEnabled().then(setAgentBridgeEnabledState);
+    getAskInBrowser().then(setAskInBrowserState);
+    readBridgeStatus().then(setAgentBridgeStatus);
     getNudgeEnabled().then(setNudgeEnabledState);
     getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
     getNudgeStaleMinutes().then(setNudgeStaleMinutesState);
@@ -911,6 +926,7 @@ function App() {
         getLazyRestoreEnabled().then(setLazyRestoreEnabledState);
         getQuickLinksEnabled().then(setQuickLinksEnabledState);
         getAgentBridgeEnabled().then(setAgentBridgeEnabledState);
+        getAskInBrowser().then(setAskInBrowserState);
         getNudgeEnabled().then(setNudgeEnabledState);
         getNudgeIntervalMinutes().then(setNudgeIntervalMinutesState);
         getNudgeStaleMinutes().then(setNudgeStaleMinutesState);
@@ -919,6 +935,9 @@ function App() {
     browser.storage.onChanged.addListener(onChanged);
     return () => browser.storage.onChanged.removeListener(onChanged);
   }, []);
+
+  // The bridge's connection state is kept in session storage by the background.
+  useEffect(() => onBridgeStatusChanged(setAgentBridgeStatus), []);
 
   const handleVibeChange = (v: Vibe) => {
     setVibe(v);
@@ -950,7 +969,6 @@ function App() {
     });
   };
 
-  // Temporary control (Slice P2); the real Agent bridge section is Slice S1.
   const toggleAgentBridge = () => {
     if (agentBridgeEnabled) {
       setAgentBridgeEnabled(false);
@@ -1434,13 +1452,8 @@ function App() {
         onToggleHoverPeek={toggleHoverPeek}
         lazyRestoreEnabled={lazyRestoreEnabled}
         onToggleLazyRestore={toggleLazyRestore}
-        agentBridgeEnabled={agentBridgeEnabled}
-        onToggleAgentBridge={toggleAgentBridge}
-        agentUndoableCount={activity.filter((entry) => entry.undoable).length}
-        onOpenAgentActivity={() => {
-          setUndoError(null);
-          setActivityOpen(true);
-        }}
+        agentBridgeStatus={describeStatus(agentBridgeEnabled, agentBridgeStatus)}
+        onOpenAgentBridge={() => setAgentBridgeDialogOpen(true)}
         nudgeEnabled={nudgeEnabled}
         nudgeIntervalMinutes={nudgeIntervalMinutes}
         onOpenNudgeSettings={() => setNudgeDialogOpen(true)}
@@ -1456,6 +1469,24 @@ function App() {
         }}
         onImportFile={handleImportFile}
         onOpenTutorial={() => setOnboardingOpen(true)}
+      />
+      <AgentBridgeDialog
+        open={agentBridgeDialogOpen}
+        onOpenChange={setAgentBridgeDialogOpen}
+        enabled={agentBridgeEnabled}
+        onToggle={toggleAgentBridge}
+        status={describeStatus(agentBridgeEnabled, agentBridgeStatus)}
+        onCheckAgain={() => void requestRecheck()}
+        askInBrowser={askInBrowser}
+        onAskInBrowserChange={(value) => {
+          setAskInBrowserState(value);
+          void setAskInBrowser(value);
+        }}
+        undoableCount={activity.filter((entry) => entry.undoable).length}
+        onOpenActivity={() => {
+          setUndoError(null);
+          setActivityOpen(true);
+        }}
       />
       <AgentActivityDialog
         open={activityOpen}

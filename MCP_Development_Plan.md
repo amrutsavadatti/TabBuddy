@@ -761,7 +761,7 @@ sends no `arguments` object at all; clients that list the arguments send one.)*
 
 **Commit:** `feat(bridge): show agent activity in the dashboard with undo`
 
-### 🔲 Slice X4 — Optional confirmation in the browser
+### ✅ Slice X4 — Optional confirmation in the browser
 **Build:**
 - The setting "Ask me in the browser before the agent closes or archives
   tabs".
@@ -769,6 +769,18 @@ sends no `arguments` object at all; clients that list the arguments send one.)*
   the nudge window) listing the tabs, with Confirm and Cancel.
 - The tool waits for the user's answer, up to 2 minutes, and returns
   `declined` on Cancel or timeout.
+
+*(Built as: the window is a new `confirm.html` page listing the proposal (any kind,
+including a whole triage plan, bucket by bucket). It leaves its answer in session
+storage and the background, which the open native port keeps alive, waits for it.
+Closing the window counts as Cancel, and an answer written just before the close
+wins. The wait is two minutes or the time the proposal has left, whichever is
+shorter. Cancel and timeout use the proposal up and return `declined: true` with
+`reason` `cancelled` or `timeout`, as a result rather than an error, so the agent
+reads it as the user's answer. If the window cannot open, nothing is changed and
+the proposal still works. Asking twice for one proposal is refused while its
+window is open. The bridge's per-call timeout for `confirmProposal` is
+`CONFIRM_WAIT_MS` plus 30 seconds, since the default 10 would fire first.)*
 
 **Test:**
 - A unit test for the pending-confirmation state (confirm, cancel, timeout).
@@ -783,7 +795,7 @@ sends no `arguments` object at all; clients that list the arguments send one.)*
 
 ## Track S — Ship it
 
-### 🔲 Slice S1 — Real settings UI and status
+### ✅ Slice S1 — Real settings UI and status
 **Build:**
 - The "Agent bridge" settings section:
   - The toggle.
@@ -793,6 +805,18 @@ sends no `arguments` object at all; clients that list the arguments send one.)*
   - A link to the activity panel.
 - Replaces the temporary P2 chip. Status comes from the port state plus the
   `hello` reply.
+
+*(Built as: the "Agent bridge" chip in the Automation group now opens a dialog
+with all of the above, and the two temporary chips (bridge toggle, Agent activity)
+are gone; the activity panel is reached from the dialog. The background writes the
+connection state to session storage and the dialog watches it. "Connected" means
+the native port stayed open 1.5 seconds or the host has sent a request: a missing
+host makes the browser close the port at once. The host's version is not shown,
+because the host never sends it to the extension. "Not installed" and "Error" come
+from the browser's own disconnect message (host not found; not allowed for this
+extension; host exited). "Check again" reconnects at once and restarts the
+backoff. The install line is `npx tabbuddy-bridge install`, which works once S4
+publishes the package.)*
 
 **Test:**
 - A unit test for mapping port state to status.
@@ -861,7 +885,7 @@ passes, and `ping` and `list_snapshots` work.
 | ✅ **M3b — Triage assistant, reading and filing** | T1–T3 | "Summarise this window and recommend a cleanup"; file tabs into new or existing snapshots (closing is still manual) |
 | **M4 — Safe cleanup** | X1–X3 | "Clean up my browser" with approval and undo |
 | ✅ **M4b — Agentic triage** | T4–T6 | The full loop: recommend, user decides, one confirmation, unsure tabs go to manual triage |
-| **M5 — Release** | X4, S1–S4 | A one-command install for other users |
+| **M5 — Release** | ✅ X4, ✅ S1, S2 ✅, S3–S4 | A one-command install for other users |
 
 ## Notes from building
 

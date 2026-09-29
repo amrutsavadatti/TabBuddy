@@ -7,7 +7,6 @@ import {
   Eye,
   EyeOff,
   HelpCircle,
-  History,
   Leaf,
   Bot,
   Link2,
@@ -37,6 +36,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { formatDurationShort } from '@/lib/duration';
+import type { StatusView } from '@/lib/agentBridgeStatus';
 
 type GroupId = 'dashboard' | 'automation' | 'quicklinks' | 'data' | 'help';
 
@@ -126,10 +126,8 @@ export function SettingsBar({
   onToggleHoverPeek,
   lazyRestoreEnabled,
   onToggleLazyRestore,
-  agentBridgeEnabled,
-  onToggleAgentBridge,
-  agentUndoableCount,
-  onOpenAgentActivity,
+  agentBridgeStatus,
+  onOpenAgentBridge,
   nudgeEnabled,
   nudgeIntervalMinutes,
   onOpenNudgeSettings,
@@ -149,11 +147,9 @@ export function SettingsBar({
   onToggleHoverPeek: () => void;
   lazyRestoreEnabled: boolean;
   onToggleLazyRestore: () => void;
-  agentBridgeEnabled: boolean;
-  onToggleAgentBridge: () => void;
-  /** How many agent actions can still be undone. */
-  agentUndoableCount: number;
-  onOpenAgentActivity: () => void;
+  /** What the Agent bridge chip shows; its dialog holds the real controls. */
+  agentBridgeStatus: StatusView;
+  onOpenAgentBridge: () => void;
   nudgeEnabled: boolean;
   nudgeIntervalMinutes: number;
   onOpenNudgeSettings: () => void;
@@ -248,17 +244,17 @@ export function SettingsBar({
           <Chip
             icon={<Bot size={15} />}
             label="Agent bridge"
-            state={agentBridgeEnabled ? 'On' : 'Off'}
-            active={agentBridgeEnabled}
-            title="Let an AI agent (through the tabbuddy-bridge MCP server) use TabBuddy. Off by default"
-            onClick={onToggleAgentBridge}
-          />
-          <Chip
-            icon={<History size={15} />}
-            label="Agent activity"
-            state={agentUndoableCount > 0 ? `${agentUndoableCount} to undo` : undefined}
-            title="See what an AI agent has done through TabBuddy, and undo it"
-            onClick={onOpenAgentActivity}
+            state={agentBridgeStatus.state === 'off' ? 'Off' : agentBridgeStatus.label}
+            active={agentBridgeStatus.state !== 'off'}
+            tone={
+              agentBridgeStatus.tone === 'good'
+                ? 'green'
+                : agentBridgeStatus.tone === 'warn' || agentBridgeStatus.tone === 'bad'
+                  ? 'amber'
+                  : 'primary'
+            }
+            title="Let an AI agent (through the tabbuddy-bridge MCP server) use TabBuddy: set up, status, and what it has done. Off by default"
+            onClick={onOpenAgentBridge}
           />
           </GroupPanel>
 

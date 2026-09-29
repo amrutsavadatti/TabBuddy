@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5f5f7;
+  --foreground: #1c1b1f;
+  --card: #ffffff;
+  --card-foreground: #1c1b1f;
+  --primary: #4d5eff;
+  --primary-foreground: #ffffff;
+  --muted: #e6e6ea;
+  --muted-foreground: #5f5f65;
+  --border: #dcdce1;
+  --destructive: #d93025;
+  --destructive-foreground: #ffffff;
+  --radius: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #131316;
+    --foreground: #eae9ec;
+    --card: #1e1e22;
+    --card-foreground: #eae9ec;
+    --primary: #a9b6ff;
+    --primary-foreground: #131316;
+    --muted: #29292e;
+    --muted-foreground: #a1a1a8;
+    --border: #313136;
+    --destructive: #ff6b60;
+    --destructive-foreground: #131316;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --radius-xl: var(--radius);
+}
+
+/* Background "vibes" — subtle animated gradients behind the (opaque) cards. */
+:root[data-vibe="aurora"] {
+  --vibe-gradient: linear-gradient(120deg, hsl(190 70% 92%), hsl(260 65% 93%), hsl(150 60% 92%));
+}
+:root[data-vibe="sunset"] {
+  --vibe-gradient: linear-gradient(120deg, hsl(20 85% 92%), hsl(340 75% 93%), hsl(280 60% 93%));
+}
+:root[data-vibe="ocean"] {
+  --vibe-gradient: linear-gradient(120deg, hsl(200 75% 92%), hsl(190 65% 91%), hsl(210 65% 93%));
+}
+:root[data-vibe="meadow"] {
+  --vibe-gradient: linear-gradient(120deg, hsl(90 45% 92%), hsl(150 40% 92%), hsl(50 55% 93%));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-vibe="aurora"] {
+    --vibe-gradient: linear-gradient(120deg, hsl(190 55% 15%), hsl(260 45% 17%), hsl(150 45% 15%));
+  }
+  :root[data-vibe="sunset"] {
+    --vibe-gradient: linear-gradient(120deg, hsl(20 55% 16%), hsl(340 45% 17%), hsl(280 40% 17%));
+  }
+  :root[data-vibe="ocean"] {
+    --vibe-gradient: linear-gradient(120deg, hsl(200 50% 14%), hsl(190 45% 14%), hsl(210 40% 16%));
+  }
+  :root[data-vibe="meadow"] {
+    --vibe-gradient: linear-gradient(120deg, hsl(90 30% 14%), hsl(150 25% 14%), hsl(50 30% 15%));
+  }
+}
+
+@keyframes vibe-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+body {
+  background-color: var(--background);
+  background-image: var(--vibe-gradient, none);
+  background-size: 200% 200%;
+  animation: vibe-shift 20s ease-in-out infinite;
+  color: var(--foreground);
+  font-family: 'Google Sans', Roboto, system-ui, sans-serif;
+}
