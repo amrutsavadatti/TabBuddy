@@ -26,6 +26,7 @@ import {
   MAX_TITLE_LENGTH,
 } from '../bridge/protocol';
 import { focusTab, openUrls, parseOpenUrlsParams, parseTabId } from './agentOpen';
+import { saveWindow } from './agentSave';
 import { BridgeFailure } from './bridgeFailure';
 import { getCategories, getSnapshotsInCategory } from './categories';
 import { resolveLazyTab } from './lazyTab';
@@ -244,6 +245,7 @@ export const handlers: HandlerTable = {
     };
   },
   focusTab: (params): Promise<FocusTabResult> => focusTab(parseTabId(params)),
+  saveWindow: (params) => saveWindow(params),
   openUrls: async (params): Promise<OpenUrlsResult> => {
     const { urls, newWindow } = parseOpenUrlsParams(params);
     const snapshotWindowIds = new Set(

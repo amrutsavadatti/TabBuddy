@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { captureWindowTabs, createSnapshotFromCurrentWindow } from './capture';
+import { captureWindowTabs, createSnapshotFromCurrentWindow, createSnapshotFromWindow } from './capture';
 import { buildLazyTabUrl } from './lazyTab';
 import { getManagedTabIds } from './managedTabs';
 
@@ -83,5 +83,36 @@ describe('createSnapshotFromCurrentWindow', () => {
     await createSnapshotFromCurrentWindow('My Window');
 
     expect([...(await getManagedTabIds())].sort()).toEqual([11, 12]);
+  });
+});
+
+describe('createSnapshotFromWindow', () => {
+  function mockWindowTabs() {
+    vi.spyOn(browser.tabs, 'query').mockResolvedValue([
+      { id: 21, url: 'https://a.com/', title: 'A', pinned: false, groupId: -1 },
+    ] as any);
+    vi.spyOn(browser.tabGroups as any, 'query').mockResolvedValue([]);
+  }
+
+  it('captures the given window, not the current one', async () => {
+    const getCurrent = vi.spyOn(browser.windows, 'getCurrent');
+    mockWindowTabs();
+
+    const snapshot = await createSnapshotFromWindow(42, 'Elsewhere');
+
+    expect(getCurrent).not.toHaveBeenCalled();
+    expect(browser.tabs.query).toHaveBeenCalledWith({ windowId: 42 });
+    expect(snapshot).toMatchObject({ name: 'Elsewhere', linkedWindowId: 42 });
+    expect([...(await getManagedTabIds())]).toEqual([21]);
+  });
+
+  it('makes an unlinked copy that protects nothing when link is false', async () => {
+    mockWindowTabs();
+
+    const snapshot = await createSnapshotFromWindow(42, 'Copy', { link: false });
+
+    expect(snapshot.linkedWindowId).toBeNull();
+    expect(snapshot.tabs).toHaveLength(1);
+    expect([...(await getManagedTabIds())]).toEqual([]);
   });
 });

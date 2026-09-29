@@ -38,9 +38,9 @@ describe('tools', () => {
     'list_snapshots',
     'search_tabs',
   ];
-  const WRITES = ['focus_tab', 'open_urls', 'restore_snapshot'];
+  const WRITES = ['focus_tab', 'open_urls', 'restore_snapshot', 'save_window'];
 
-  it('offers seven read-only tools and three that change the browser', async () => {
+  it('offers seven read-only tools and four that change things', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...READ_ONLY, ...WRITES].sort());
@@ -153,6 +153,33 @@ describe('tools', () => {
     expect(send).toHaveBeenLastCalledWith('focusTab', { tabId: 42 });
     await client.callTool({ name: 'open_urls', arguments: { urls: ['https://a.test/'], newWindow: true } });
     expect(send).toHaveBeenLastCalledWith('openUrls', { urls: ['https://a.test/'], newWindow: true });
+  });
+
+  it('save_window forwards its arguments', async () => {
+    const send = vi.fn(async () => ({ snapshotId: 's1' }));
+    const client = await connect(send);
+    await client.callTool({
+      name: 'save_window',
+      arguments: { name: 'Research', windowId: 12, categoryIds: ['c1'] },
+    });
+    expect(send).toHaveBeenLastCalledWith('saveWindow', { name: 'Research', windowId: 12, categoryIds: ['c1'] });
+  });
+
+  it('rejects malformed save_window arguments without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    const attempts = [
+      { name: 'save_window', arguments: {} },
+      { name: 'save_window', arguments: { name: '' } },
+      { name: 'save_window', arguments: { name: 'x'.repeat(101) } },
+      { name: 'save_window', arguments: { name: 'X', windowId: 1.5 } },
+      { name: 'save_window', arguments: { name: 'X', categoryIds: Array(11).fill('c') } },
+    ];
+    for (const attempt of attempts) {
+      const result = await client.callTool(attempt).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('rejects malformed write arguments without calling the browser', async () => {

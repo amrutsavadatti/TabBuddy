@@ -14,7 +14,8 @@ export type Method =
   | 'getUsageStats'
   | 'restoreSnapshot'
   | 'focusTab'
-  | 'openUrls';
+  | 'openUrls'
+  | 'saveWindow';
 
 export type ErrorCode =
   | 'unknown_method'
@@ -268,4 +269,26 @@ export interface OpenUrlsResult {
    * window the user used last belongs to a saved snapshot (or is incognito). */
   openedInNewWindow: boolean;
   tabs: { tabId: number; url: string }[];
+}
+
+/** Longest snapshot name `saveWindow` accepts. */
+export const MAX_SNAPSHOT_NAME_LENGTH = 100;
+
+export interface SaveWindowParams {
+  name: string;
+  /** Defaults to the window the user used last. */
+  windowId?: number;
+  categoryIds?: string[];
+}
+
+export interface SaveWindowResult {
+  snapshotId: string;
+  /** The name it was saved under; "(2)" is added if the name was taken. */
+  name: string;
+  tabCount: number;
+  windowId: number;
+  /** True if the snapshot is tied to the window (its tabs are then protected from nudges). */
+  linkedToWindow: boolean;
+  /** Set when the window already belonged to a snapshot: the new one is an unlinked copy. */
+  windowAlreadySavedAs: string | null;
 }

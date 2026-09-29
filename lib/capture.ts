@@ -35,20 +35,24 @@ export async function captureWindowTabs(windowId: number): Promise<{
   return { tabs: snapshotTabs, tabGroups, tabIds };
 }
 
-export async function createSnapshotFromCurrentWindow(
+/** Captures a window's tabs into a new (unsaved) snapshot. With `link` (the
+ * default) the snapshot is tied to the window and its tabs are protected from
+ * nudges, like the toolbar's Save; without it the snapshot is a plain copy. */
+export async function createSnapshotFromWindow(
+  windowId: number,
   name: string,
+  { link = true }: { link?: boolean } = {},
 ): Promise<Snapshot> {
-  const currentWindow = await browser.windows.getCurrent();
-  const { tabs, tabGroups, tabIds } = await captureWindowTabs(currentWindow.id!);
+  const { tabs, tabGroups, tabIds } = await captureWindowTabs(windowId);
   const now = Date.now();
   const id = crypto.randomUUID();
-  await setManagedTabs(id, tabIds);
+  if (link) await setManagedTabs(id, tabIds);
   return {
     id,
     name,
     tabs,
     tabGroups,
-    linkedWindowId: currentWindow.id ?? null,
+    linkedWindowId: link ? windowId : null,
     categoryIds: [],
     usageCount: 0,
     pinned: false,
@@ -56,4 +60,11 @@ export async function createSnapshotFromCurrentWindow(
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export async function createSnapshotFromCurrentWindow(
+  name: string,
+): Promise<Snapshot> {
+  const currentWindow = await browser.windows.getCurrent();
+  return createSnapshotFromWindow(currentWindow.id!, name);
 }

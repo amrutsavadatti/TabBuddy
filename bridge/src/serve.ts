@@ -5,6 +5,7 @@ import {
   MAX_OPEN_TABS,
   MAX_OPEN_URLS,
   MAX_SEARCH_RESULTS,
+  MAX_SNAPSHOT_NAME_LENGTH,
   MAX_STALE_TABS,
   MAX_USAGE_ITEMS,
   MAX_SNAPSHOT_TABS_PER_CALL,
@@ -269,6 +270,42 @@ export function createServer(send: Send): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     ({ urls, newWindow }) => runTool(send, 'openUrls', { urls, newWindow }),
+  );
+
+  server.registerTool(
+    'save_window',
+    {
+      title: 'Save a browser window as a snapshot',
+      description:
+        'Save the tabs of one open browser window as a new named snapshot, so the user can reopen it later. ' +
+        'By default it saves the window the user used last; pass windowId (from list_open_windows) to save ' +
+        'a specific one. The snapshot is tied to the window and its tabs are protected from cleanup nudges. ' +
+        'If the window already belongs to a snapshot, a separate, unlinked copy is saved instead and ' +
+        'windowAlreadySavedAs names the original (nothing about the original changes). If the name is ' +
+        'already taken, "(2)" is added and the result shows the name used. "Archived" is reserved and ' +
+        'refused. Optionally file it under categories (ids from list_categories). Saving never closes ' +
+        'anything. Pick a short, descriptive name that fits how the user names their snapshots ' +
+        '(list_snapshots shows them); do not guess if the window is unclear, ask.',
+      inputSchema: {
+        name: z
+          .string()
+          .min(1)
+          .max(MAX_SNAPSHOT_NAME_LENGTH)
+          .describe('What to call the snapshot, e.g. "Vector DB research".'),
+        windowId: z
+          .number()
+          .int()
+          .optional()
+          .describe('Window to save, from list_open_windows. Default: the window used last.'),
+        categoryIds: z
+          .array(z.string().min(1))
+          .max(10)
+          .optional()
+          .describe('Categories to file it under, from list_categories.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    ({ name, windowId, categoryIds }) => runTool(send, 'saveWindow', { name, windowId, categoryIds }),
   );
 
   server.registerTool(
