@@ -15,7 +15,11 @@ export type Method =
   | 'restoreSnapshot'
   | 'focusTab'
   | 'openUrls'
-  | 'saveWindow';
+  | 'saveWindow'
+  | 'createSnapshotFromUrls'
+  | 'updateSnapshotFromWindow'
+  | 'renameSnapshot'
+  | 'tagSnapshots';
 
 export type ErrorCode =
   | 'unknown_method'
@@ -291,4 +295,70 @@ export interface SaveWindowResult {
   linkedToWindow: boolean;
   /** Set when the window already belonged to a snapshot: the new one is an unlinked copy. */
   windowAlreadySavedAs: string | null;
+}
+
+/** Most URLs `createSnapshotFromUrls` accepts. */
+export const MAX_SNAPSHOT_URLS = 50;
+export const MAX_CATEGORY_NAME_LENGTH = 50;
+/** Most category names one call may use. */
+export const MAX_CATEGORY_NAMES = 10;
+/** Most snapshots `tagSnapshots` tags in one call. */
+export const MAX_TAG_TARGETS = 50;
+
+/** A category a call used, and whether the call had to create it. */
+export interface CategoryUse {
+  id: string;
+  name: string;
+  created: boolean;
+}
+
+export interface CreateSnapshotFromUrlsParams {
+  name: string;
+  urls: (string | { url: string; title?: string })[];
+  /** Category names (matched case-insensitively; created if missing). */
+  categoryNames?: string[];
+}
+
+export interface CreateSnapshotFromUrlsResult {
+  snapshotId: string;
+  /** The name it was saved under; "(2)" is added if the name was taken. */
+  name: string;
+  tabCount: number;
+  /** Entries that were not saved, and why (invalid address, or a duplicate). */
+  skipped: { value: string; reason: string }[];
+  categories: CategoryUse[];
+}
+
+export interface UpdateSnapshotFromWindowParams {
+  id: string;
+}
+
+export interface UpdateSnapshotFromWindowResult {
+  id: string;
+  name: string;
+  /** Tabs it held before; the snapshot now matches its window, so closed tabs are gone from it. */
+  previousTabCount: number;
+  tabCount: number;
+}
+
+export interface RenameSnapshotParams {
+  id: string;
+  name: string;
+}
+
+export interface RenameSnapshotResult {
+  id: string;
+  previousName: string;
+  /** The name it now has; "(2)" is added if another snapshot uses the name. */
+  name: string;
+}
+
+export interface TagSnapshotsParams {
+  snapshotIds: string[];
+  categoryNames: string[];
+}
+
+export interface TagSnapshotsResult {
+  categories: CategoryUse[];
+  tagged: number;
 }

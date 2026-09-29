@@ -38,9 +38,18 @@ describe('tools', () => {
     'list_snapshots',
     'search_tabs',
   ];
-  const WRITES = ['focus_tab', 'open_urls', 'restore_snapshot', 'save_window'];
+  const WRITES = [
+    'create_snapshot_from_urls',
+    'focus_tab',
+    'open_urls',
+    'rename_snapshot',
+    'restore_snapshot',
+    'save_window',
+    'tag_snapshots',
+    'update_snapshot_from_window',
+  ];
 
-  it('offers seven read-only tools and four that change things', async () => {
+  it('offers seven read-only tools and eight that change things', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...READ_ONLY, ...WRITES].sort());
@@ -50,13 +59,21 @@ describe('tools', () => {
     }
   });
 
-  it('marks the write tools as not read-only and not destructive', async () => {
+  it('marks every write tool as not read-only, and all but the update as non-destructive', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     for (const tool of tools.filter((t) => WRITES.includes(t.name))) {
       expect(tool.annotations?.readOnlyHint).toBe(false);
-      expect(tool.annotations?.destructiveHint).toBe(false);
+      expect(tool.annotations?.destructiveHint).toBe(tool.name === 'update_snapshot_from_window');
     }
+  });
+
+  it('marks update_snapshot_from_window as destructive, since it replaces saved tabs', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const update = tools.find((t) => t.name === 'update_snapshot_from_window')!;
+    expect(update.annotations?.destructiveHint).toBe(true);
+    expect(update.description).toContain('REPLACES');
   });
 
   it('list_snapshots returns the extension result as JSON text', async () => {
@@ -163,6 +180,54 @@ describe('tools', () => {
       arguments: { name: 'Research', windowId: 12, categoryIds: ['c1'] },
     });
     expect(send).toHaveBeenLastCalledWith('saveWindow', { name: 'Research', windowId: 12, categoryIds: ['c1'] });
+  });
+
+  it("forwards the snapshot-editing tools' arguments", async () => {
+    const send = vi.fn(async () => ({ ok: true }));
+    const client = await connect(send);
+    await client.callTool({
+      name: 'create_snapshot_from_urls',
+      arguments: {
+        name: 'Reading',
+        urls: ['https://a.test/', { url: 'https://b.test/', title: 'B' }],
+        categoryNames: ['Learning'],
+      },
+    });
+    expect(send).toHaveBeenLastCalledWith('createSnapshotFromUrls', {
+      name: 'Reading',
+      urls: ['https://a.test/', { url: 'https://b.test/', title: 'B' }],
+      categoryNames: ['Learning'],
+    });
+    await client.callTool({ name: 'update_snapshot_from_window', arguments: { id: 's1' } });
+    expect(send).toHaveBeenLastCalledWith('updateSnapshotFromWindow', { id: 's1' });
+    await client.callTool({ name: 'rename_snapshot', arguments: { id: 's1', name: 'New' } });
+    expect(send).toHaveBeenLastCalledWith('renameSnapshot', { id: 's1', name: 'New' });
+    await client.callTool({
+      name: 'tag_snapshots',
+      arguments: { snapshotIds: ['s1', 's2'], categoryNames: ['Work'] },
+    });
+    expect(send).toHaveBeenLastCalledWith('tagSnapshots', { snapshotIds: ['s1', 's2'], categoryNames: ['Work'] });
+  });
+
+  it('rejects malformed snapshot-editing arguments without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    const attempts = [
+      { name: 'create_snapshot_from_urls', arguments: { name: 'X', urls: [] } },
+      { name: 'create_snapshot_from_urls', arguments: { name: 'X', urls: Array(51).fill('https://a.test/') } },
+      { name: 'create_snapshot_from_urls', arguments: { name: 'X', urls: [{ title: 'no url' }] } },
+      { name: 'create_snapshot_from_urls', arguments: { name: 'X', urls: ['https://a.test/'], categoryNames: Array(11).fill('c') } },
+      { name: 'update_snapshot_from_window', arguments: {} },
+      { name: 'rename_snapshot', arguments: { id: 's1' } },
+      { name: 'rename_snapshot', arguments: { id: 's1', name: 'x'.repeat(101) } },
+      { name: 'tag_snapshots', arguments: { snapshotIds: [], categoryNames: ['A'] } },
+      { name: 'tag_snapshots', arguments: { snapshotIds: ['s1'], categoryNames: [] } },
+    ];
+    for (const attempt of attempts) {
+      const result = await client.callTool(attempt).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('rejects malformed save_window arguments without calling the browser', async () => {

@@ -16,11 +16,10 @@ export interface ParsedSaveWindow {
   categoryIds: string[];
 }
 
-/** Pure: checks a saveWindow request. The name must be a real, non-reserved
- * name; a name that is already taken is fine (it gets a "(2)" suffix). */
-export function parseSaveWindowParams(params: unknown): ParsedSaveWindow {
-  const p = (params ?? {}) as Partial<SaveWindowParams>;
-  const name = typeof p.name === 'string' ? p.name.trim() : '';
+/** Pure: a snapshot name an agent may use: a real, non-reserved name of
+ * sensible length. A name that is already taken is fine (callers add "(2)"). */
+export function parseSnapshotName(value: unknown): string {
+  const name = typeof value === 'string' ? value.trim() : '';
   if (!name) throw new BridgeFailure('invalid_params', 'name is required: what to call the snapshot.');
   if (name.length > MAX_SNAPSHOT_NAME_LENGTH) {
     throw new BridgeFailure('invalid_params', `name is too long; use ${MAX_SNAPSHOT_NAME_LENGTH} characters or fewer.`);
@@ -31,6 +30,13 @@ export function parseSaveWindowParams(params: unknown): ParsedSaveWindow {
       '"Archived" is reserved for TabBuddy\'s archive. Choose another name.',
     );
   }
+  return name;
+}
+
+/** Pure: checks a saveWindow request. */
+export function parseSaveWindowParams(params: unknown): ParsedSaveWindow {
+  const p = (params ?? {}) as Partial<SaveWindowParams>;
+  const name = parseSnapshotName(p.name);
   if (p.windowId !== undefined && (typeof p.windowId !== 'number' || !Number.isInteger(p.windowId))) {
     throw new BridgeFailure('invalid_params', 'windowId must be a window id from list_open_windows.');
   }

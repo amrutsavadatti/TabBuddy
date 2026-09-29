@@ -5,7 +5,11 @@ import {
   MAX_OPEN_TABS,
   MAX_OPEN_URLS,
   MAX_SEARCH_RESULTS,
+  MAX_CATEGORY_NAME_LENGTH,
+  MAX_CATEGORY_NAMES,
   MAX_SNAPSHOT_NAME_LENGTH,
+  MAX_SNAPSHOT_URLS,
+  MAX_TAG_TARGETS,
   MAX_STALE_TABS,
   MAX_USAGE_ITEMS,
   MAX_SNAPSHOT_TABS_PER_CALL,
@@ -306,6 +310,100 @@ export function createServer(send: Send): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     ({ name, windowId, categoryIds }) => runTool(send, 'saveWindow', { name, windowId, categoryIds }),
+  );
+
+  const categoryNames = (what: string) =>
+    z
+      .array(z.string().min(1).max(MAX_CATEGORY_NAME_LENGTH))
+      .max(MAX_CATEGORY_NAMES)
+      .describe(
+        `${what} Names are matched case-insensitively against the user's existing categories ` +
+          '(see list_categories) and a name that does not exist yet is created, so reuse an existing ' +
+          'category when one fits rather than inventing a near-duplicate.',
+      );
+
+  server.registerTool(
+    'create_snapshot_from_urls',
+    {
+      title: 'Save a list of links as a snapshot',
+      description:
+        'Save a list of web pages as a new named snapshot without opening anything: a reading list or ' +
+        'set of sources the user can reopen later with one click. Use it to keep what you found or ' +
+        'researched. Each entry is a URL, or {url, title} to give it a readable title (otherwise the ' +
+        `site name is used). Only http and https addresses are kept, up to ${MAX_SNAPSHOT_URLS}; ` +
+        'repeats and anything unusable are left out and listed in "skipped", so tell the user if any ' +
+        'were. If the name is taken, "(2)" is added and the result shows the name used. "Archived" is ' +
+        'reserved. Optionally file it under categories by name. Check that links are real before saving ' +
+        'them; do not save addresses you have not verified.',
+      inputSchema: {
+        name: z
+          .string()
+          .min(1)
+          .max(MAX_SNAPSHOT_NAME_LENGTH)
+          .describe('What to call the snapshot, e.g. "System Design & DSA".'),
+        urls: z
+          .array(z.union([z.string().min(1), z.object({ url: z.string().min(1), title: z.string().optional() })]))
+          .min(1)
+          .max(MAX_SNAPSHOT_URLS)
+          .describe('Web addresses, or {url, title} pairs.'),
+        categoryNames: categoryNames('Categories to file the snapshot under.').optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    ({ name, urls, categoryNames }) => runTool(send, 'createSnapshotFromUrls', { name, urls, categoryNames }),
+  );
+
+  server.registerTool(
+    'update_snapshot_from_window',
+    {
+      title: "Re-save a snapshot from its open window",
+      description:
+        "Update a snapshot so it matches what is open in its window right now. This REPLACES the " +
+        "snapshot's saved tabs: tabs that were closed in that window since it was saved are dropped from " +
+        'the snapshot, and new ones are added. The result gives previousTabCount and tabCount so you can ' +
+        'tell the user what changed. It only works for a snapshot that is currently open in a window ' +
+        '(list_snapshots shows isOpen; restore_snapshot opens it), and never for "Archived". Use it only ' +
+        'when the user wants the saved snapshot to reflect their current window; confirm first if the ' +
+        'tab count would drop noticeably.',
+      inputSchema: { id: z.string().min(1).describe('Snapshot id, from list_snapshots. It must be open.') },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    ({ id }) => runTool(send, 'updateSnapshotFromWindow', { id }),
+  );
+
+  server.registerTool(
+    'rename_snapshot',
+    {
+      title: 'Rename a snapshot',
+      description:
+        'Rename a saved snapshot. Its tabs, categories and usage are unchanged. If another snapshot ' +
+        'already has the name, "(2)" is added and the result shows the name used. The reserved ' +
+        '"Archived" snapshot cannot be renamed and no other snapshot can take that name.',
+      inputSchema: {
+        id: z.string().min(1).describe('Snapshot id, from list_snapshots.'),
+        name: z.string().min(1).max(MAX_SNAPSHOT_NAME_LENGTH).describe('The new name.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    ({ id, name }) => runTool(send, 'renameSnapshot', { id, name }),
+  );
+
+  server.registerTool(
+    'tag_snapshots',
+    {
+      title: 'Add categories to snapshots',
+      description:
+        'Add one or more categories (tags) to one or more snapshots. Existing categories on a snapshot ' +
+        'are kept; this only adds. Snapshots are checked first, so a wrong id changes nothing. The ' +
+        `"Archived" snapshot cannot be categorised. At most ${MAX_TAG_TARGETS} snapshots per call. The ` +
+        'result says which categories were created new.',
+      inputSchema: {
+        snapshotIds: z.array(z.string().min(1)).min(1).max(MAX_TAG_TARGETS).describe('Snapshot ids, from list_snapshots.'),
+        categoryNames: categoryNames('Categories to add.').min(1),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    ({ snapshotIds, categoryNames }) => runTool(send, 'tagSnapshots', { snapshotIds, categoryNames }),
   );
 
   server.registerTool(

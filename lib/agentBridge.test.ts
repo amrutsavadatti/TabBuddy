@@ -500,3 +500,37 @@ describe('openUrls avoids snapshot windows', () => {
     expect(response.result).toMatchObject({ windowId: 77, openedInNewWindow: true });
   });
 });
+
+describe('snapshot editing through the dispatcher', () => {
+  it('creates a snapshot from urls, renames it and tags it', async () => {
+    const created = (await dispatch({
+      id: 'c',
+      method: 'createSnapshotFromUrls',
+      params: { name: 'Reading', urls: ['https://a.test/'], categoryNames: ['Learning'] },
+    })) as any;
+    expect(created.result).toMatchObject({ name: 'Reading', tabCount: 1 });
+
+    const renamed = (await dispatch({
+      id: 'r',
+      method: 'renameSnapshot',
+      params: { id: created.result.snapshotId, name: 'Reading list' },
+    })) as any;
+    expect(renamed.result).toMatchObject({ previousName: 'Reading', name: 'Reading list' });
+
+    const tagged = (await dispatch({
+      id: 't',
+      method: 'tagSnapshots',
+      params: { snapshotIds: [created.result.snapshotId], categoryNames: ['Later'] },
+    })) as any;
+    expect(tagged.result).toMatchObject({ tagged: 1, categories: [{ name: 'Later', created: true }] });
+  });
+
+  it('maps failures to error codes', async () => {
+    expect(await dispatch({ id: 'x', method: 'renameSnapshot', params: { id: 'nope', name: 'X' } })).toMatchObject({
+      error: { code: 'not_found' },
+    });
+    expect(await dispatch({ id: 'x', method: 'createSnapshotFromUrls', params: { name: 'Archived', urls: ['https://a.test/'] } })).toMatchObject({
+      error: { code: 'reserved_name' },
+    });
+  });
+});
