@@ -8,6 +8,8 @@ import {
   parseGetSnapshotParams,
   summarizeSnapshot,
 } from './agentBridge';
+import { addCategory, setSnapshotCategories } from './categories';
+import { setManagedTabs } from './managedTabs';
 import { addSnapshot } from './storage';
 import { makeSnapshot, makeTab } from '@/test/factories';
 
@@ -93,6 +95,7 @@ describe('summarizeSnapshot', () => {
       name: 'Job Hunt',
       tabCount: 2,
       categoryIds: ['c1'],
+      categoryNames: [],
       usageCount: 3,
       pinned: true,
       isOpen: true,
@@ -214,5 +217,93 @@ describe('getSnapshot', () => {
   it('answers invalid_params without an id', async () => {
     const response = await dispatch({ id: 'g', method: 'getSnapshot' });
     expect(response).toMatchObject({ id: 'g', error: { code: 'invalid_params' } });
+  });
+});
+
+describe('category names', () => {
+  it('summarizeSnapshot resolves names and ignores categories that no longer exist', () => {
+    const snapshot = makeSnapshot({ categoryIds: ['c1', 'gone', 'c2'] });
+    const categories = [
+      { id: 'c1', name: 'Work', color: null, createdAt: 1 },
+      { id: 'c2', name: 'Fun', color: null, createdAt: 2 },
+    ];
+    expect(summarizeSnapshot(snapshot, categories).categoryNames).toEqual(['Work', 'Fun']);
+  });
+});
+
+describe('listCategories', () => {
+  it('counts the snapshots in each category', async () => {
+    const work = await addCategory('Work');
+    await addCategory('Empty');
+    const a = makeSnapshot();
+    const b = makeSnapshot();
+    await addSnapshot(a);
+    await addSnapshot(b);
+    await setSnapshotCategories(a.id, [work.id]);
+    await setSnapshotCategories(b.id, [work.id]);
+
+    const response = await dispatch({ id: 'c', method: 'listCategories' });
+    expect((response as { result: unknown }).result).toEqual([
+      { id: work.id, name: 'Work', snapshotCount: 2 },
+      { id: expect.any(String), name: 'Empty', snapshotCount: 0 },
+    ]);
+  });
+
+  it('returns an empty list when there are none', async () => {
+    expect(await dispatch({ id: 'c', method: 'listCategories' })).toEqual({ id: 'c', result: [] });
+  });
+});
+
+describe('listSnapshots with a category filter', () => {
+  async function setup() {
+    const work = await addCategory('Work');
+    const inWork = makeSnapshot({ name: 'In work' });
+    const outside = makeSnapshot({ name: 'Outside' });
+    await addSnapshot(inWork);
+    await addSnapshot(outside);
+    await setSnapshotCategories(inWork.id, [work.id]);
+    return { work, inWork };
+  }
+  const names = (response: unknown) =>
+    (response as { result: { name: string }[] }).result.map((s) => s.name);
+
+  it('returns only snapshots in that category, with the category name', async () => {
+    const { work } = await setup();
+    const response = await dispatch({ id: 'l', method: 'listSnapshots', params: { categoryId: work.id } });
+    expect(names(response)).toEqual(['In work']);
+    expect((response as any).result[0].categoryNames).toEqual(['Work']);
+  });
+
+  it('returns everything without a filter', async () => {
+    await setup();
+    expect(names(await dispatch({ id: 'l', method: 'listSnapshots' }))).toEqual(['In work', 'Outside']);
+  });
+
+  it('answers not_found for an unknown category and invalid_params for a bad one', async () => {
+    await setup();
+    expect(await dispatch({ id: 'l', method: 'listSnapshots', params: { categoryId: 'nope' } })).toMatchObject({
+      error: { code: 'not_found' },
+    });
+    expect(await dispatch({ id: 'l', method: 'listSnapshots', params: { categoryId: 5 } })).toMatchObject({
+      error: { code: 'invalid_params' },
+    });
+  });
+});
+
+describe('listOpenWindows', () => {
+  it('lists open windows with their linked snapshot and managed tabs', async () => {
+    const win = (await fakeBrowser.windows.create({}))!;
+    const tab = await fakeBrowser.tabs.create({ windowId: win.id, url: 'https://a.test/' });
+    const snapshot = makeSnapshot({ name: 'Job Hunt', linkedWindowId: win.id ?? null });
+    await addSnapshot(snapshot);
+    await setManagedTabs(snapshot.id, [tab.id!]);
+
+    const response = await dispatch({ id: 'w', method: 'listOpenWindows' });
+    const result = (response as any).result;
+    expect(result.truncated).toBe(false);
+    const listed = result.windows.find((w: any) => w.windowId === win.id);
+    expect(listed.snapshot).toEqual({ id: snapshot.id, name: 'Job Hunt' });
+    const listedTab = listed.tabs.find((t: any) => t.id === tab.id);
+    expect(listedTab).toMatchObject({ url: 'https://a.test/', managed: true, lazy: false });
   });
 });

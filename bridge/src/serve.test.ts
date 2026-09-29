@@ -29,10 +29,15 @@ async function connect(send: Send) {
 const textOf = (result: any) => result.content[0].text as string;
 
 describe('tools', () => {
-  it('offers list_snapshots and get_snapshot, both read-only', async () => {
+  it('offers the four read-only tools', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['get_snapshot', 'list_snapshots']);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'get_snapshot',
+      'list_categories',
+      'list_open_windows',
+      'list_snapshots',
+    ]);
     for (const tool of tools) {
       expect(tool.annotations?.readOnlyHint).toBe(true);
       expect(tool.description!.length).toBeGreaterThan(80);
@@ -46,6 +51,28 @@ describe('tools', () => {
     expect(send).toHaveBeenCalledWith('listSnapshots', undefined);
     expect(JSON.parse(textOf(result))).toEqual([{ id: 's1', name: 'Job Hunt', tabCount: 4 }]);
     expect(result.isError).toBeUndefined();
+  });
+
+  it('list_snapshots forwards a category filter, and sends no params without one', async () => {
+    const send = vi.fn(async () => []);
+    const client = await connect(send);
+    await client.callTool({ name: 'list_snapshots', arguments: { categoryId: 'c1' } });
+    expect(send).toHaveBeenLastCalledWith('listSnapshots', { categoryId: 'c1' });
+    await client.callTool({ name: 'list_snapshots', arguments: {} });
+    expect(send).toHaveBeenLastCalledWith('listSnapshots', undefined);
+  });
+
+  it('list_categories and list_open_windows call their extension methods', async () => {
+    const send = vi.fn(async (method: string) =>
+      method === 'listCategories' ? [{ id: 'c1', name: 'Work', snapshotCount: 2 }] : { windows: [], tabCount: 0, truncated: false },
+    );
+    const client = await connect(send);
+    const cats = await client.callTool({ name: 'list_categories', arguments: {} });
+    expect(send).toHaveBeenLastCalledWith('listCategories', undefined);
+    expect(JSON.parse(textOf(cats))).toEqual([{ id: 'c1', name: 'Work', snapshotCount: 2 }]);
+    const wins = await client.callTool({ name: 'list_open_windows', arguments: {} });
+    expect(send).toHaveBeenLastCalledWith('listOpenWindows', undefined);
+    expect(JSON.parse(textOf(wins))).toEqual({ windows: [], tabCount: 0, truncated: false });
   });
 
   it('get_snapshot forwards its arguments', async () => {

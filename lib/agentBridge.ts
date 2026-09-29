@@ -4,15 +4,22 @@ import {
   type BridgeRequest,
   type BridgeResponse,
   type ErrorCode,
+  type CategorySummary,
   type GetSnapshotParams,
   type HelloResult,
+  type ListSnapshotsParams,
+  type OpenWindowsResult,
   type SnapshotDetail,
   type SnapshotSummary,
   MAX_SNAPSHOT_TABS_PER_CALL,
   MAX_TITLE_LENGTH,
 } from '../bridge/protocol';
+import { getCategories, getSnapshotsInCategory } from './categories';
+import { resolveLazyTab } from './lazyTab';
+import { getManagedTabIds } from './managedTabs';
+import { shapeOpenWindows } from './openWindows';
 import { getSnapshots } from './storage';
-import type { Snapshot } from './types';
+import type { Category, Snapshot } from './types';
 
 /** A failure a handler wants reported with a specific code. */
 export class BridgeFailure extends Error {
@@ -38,12 +45,14 @@ export function toBridgeError(error: unknown): BridgeError {
 }
 
 /** Pure: no favicons (they can be huge data: URLs and are useless to an agent). */
-export function summarizeSnapshot(snapshot: Snapshot): SnapshotSummary {
+export function summarizeSnapshot(snapshot: Snapshot, categories: Category[] = []): SnapshotSummary {
+  const namesById = new Map(categories.map((c) => [c.id, c.name]));
   return {
     id: snapshot.id,
     name: snapshot.name,
     tabCount: snapshot.tabs.length,
     categoryIds: snapshot.categoryIds,
+    categoryNames: snapshot.categoryIds.flatMap((id) => namesById.get(id) ?? []),
     usageCount: snapshot.usageCount,
     pinned: snapshot.pinned,
     isOpen: snapshot.linkedWindowId !== null,
@@ -81,10 +90,11 @@ export function parseGetSnapshotParams(params: unknown): Required<GetSnapshotPar
 export function describeSnapshot(
   snapshot: Snapshot,
   { offset, limit }: { offset: number; limit: number },
+  categories: Category[] = [],
 ): SnapshotDetail {
   const page = snapshot.tabs.slice(offset, offset + limit);
   return {
-    ...summarizeSnapshot(snapshot),
+    ...summarizeSnapshot(snapshot, categories),
     tabs: page.map((tab, i) => ({
       index: offset + i,
       url: tab.url,
@@ -102,14 +112,48 @@ export const handlers: HandlerTable = {
     protocol: PROTOCOL_VERSION,
     extensionVersion: browser.runtime.getManifest().version,
   }),
-  listSnapshots: async () => (await getSnapshots()).map(summarizeSnapshot),
+  listSnapshots: async (params) => {
+    const { categoryId } = (params ?? {}) as ListSnapshotsParams;
+    if (categoryId !== undefined && typeof categoryId !== 'string') {
+      throw new BridgeFailure('invalid_params', 'categoryId must be a category id from list_categories.');
+    }
+    const [snapshots, categories] = await Promise.all([getSnapshots(), getCategories()]);
+    if (categoryId !== undefined && !categories.some((c) => c.id === categoryId)) {
+      throw new BridgeFailure('not_found', 'No category with that id. Call list_categories for current ids.');
+    }
+    const selected = categoryId === undefined ? snapshots : getSnapshotsInCategory(snapshots, categoryId);
+    return selected.map((s) => summarizeSnapshot(s, categories));
+  },
+  listCategories: async (): Promise<CategorySummary[]> => {
+    const [snapshots, categories] = await Promise.all([getSnapshots(), getCategories()]);
+    return categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      snapshotCount: getSnapshotsInCategory(snapshots, c.id).length,
+    }));
+  },
+  listOpenWindows: async (): Promise<OpenWindowsResult> => {
+    const [windows, snapshots, managedTabIds] = await Promise.all([
+      browser.windows.getAll({ populate: true }),
+      getSnapshots(),
+      getManagedTabIds(),
+    ]);
+    return shapeOpenWindows({
+      windows,
+      snapshots,
+      managedTabIds,
+      resolveLazy: resolveLazyTab,
+      extensionOrigin: browser.runtime.getURL('/' as never),
+    });
+  },
   getSnapshot: async (params) => {
     const { id, offset, limit } = parseGetSnapshotParams(params);
-    const snapshot = (await getSnapshots()).find((s) => s.id === id);
+    const [snapshots, categories] = await Promise.all([getSnapshots(), getCategories()]);
+    const snapshot = snapshots.find((s) => s.id === id);
     if (!snapshot) {
       throw new BridgeFailure('not_found', 'No snapshot with that id. Call list_snapshots for current ids.');
     }
-    return describeSnapshot(snapshot, { offset, limit });
+    return describeSnapshot(snapshot, { offset, limit }, categories);
   },
 };
 

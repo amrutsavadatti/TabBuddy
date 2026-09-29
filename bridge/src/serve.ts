@@ -1,7 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { MAX_SNAPSHOT_TABS_PER_CALL, PROTOCOL_VERSION, type HelloResult } from '../protocol.js';
+import {
+  MAX_OPEN_TABS,
+  MAX_SNAPSHOT_TABS_PER_CALL,
+  PROTOCOL_VERSION,
+  type HelloResult,
+} from '../protocol.js';
 import { BridgeCallError, callBridge } from './client.js';
 import { socketPath } from './paths.js';
 
@@ -66,12 +71,53 @@ export function createServer(send: Send): McpServer {
       description:
         "List the user's saved TabBuddy snapshots: named groups of browser tabs (like \"Job Hunt\" or " +
         '"Research") that the user can reopen with one click. Use this first to see what exists and to ' +
-        "get snapshot ids. Returns each snapshot's id, name, tab count, how often it has been opened " +
-        '(usageCount), whether it is pinned, and whether its window is open right now. Read-only.',
+        "get snapshot ids. Returns each snapshot's id, name, tab count, category names, how often it has " +
+        'been opened (usageCount), whether it is pinned, and whether its window is open right now. Pass ' +
+        'categoryId to list only one category (ids come from list_categories). Read-only.',
+      inputSchema: {
+        categoryId: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Only snapshots in this category. Get ids from list_categories.'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    ({ categoryId }) => runTool(send, 'listSnapshots', categoryId === undefined ? undefined : { categoryId }),
+  );
+
+  server.registerTool(
+    'list_categories',
+    {
+      title: 'List snapshot categories',
+      description:
+        'List the categories (tags) the user has organised their snapshots into, such as "Work" or ' +
+        '"Learning", with how many snapshots each holds. Use it to understand how the user groups ' +
+        'their snapshots, or to get a category id to filter list_snapshots. A snapshot can be in ' +
+        'several categories. Read-only.',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
-    () => runTool(send, 'listSnapshots'),
+    () => runTool(send, 'listCategories'),
+  );
+
+  server.registerTool(
+    'list_open_windows',
+    {
+      title: 'List open browser windows and tabs',
+      description:
+        'List the browser windows and tabs that are open right now, as opposed to saved snapshots. Use ' +
+        'it to see what the user is working on. Each window says which saved snapshot it was opened from ' +
+        '(if any); each tab has its id, title, real URL, whether it is active, pinned or playing sound, ' +
+        'when the user last looked at it (lastAccessed, ms since epoch), and "managed" (it belongs to a ' +
+        "snapshot's live window). A tab with lazy: true is a TabBuddy placeholder that has not loaded " +
+        'yet; url is the page it will open. Incognito windows and TabBuddy\'s own pages are never ' +
+        `listed. At most ${MAX_OPEN_TABS} tabs are returned; "truncated" says if more were left out. ` +
+        'Read-only.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    () => runTool(send, 'listOpenWindows'),
   );
 
   server.registerTool(
