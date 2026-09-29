@@ -5,6 +5,8 @@ import {
   type BridgeResponse,
   type CategorySummary,
   type GetSnapshotParams,
+  type FindDuplicateTabsResult,
+  type WindowSummary,
   type FocusTabResult,
   type GetStaleTabsParams,
   type OpenUrlsResult,
@@ -26,7 +28,7 @@ import {
   MAX_TITLE_LENGTH,
 } from '../bridge/protocol';
 import { focusTab, openUrls, parseOpenUrlsParams, parseTabId } from './agentOpen';
-import { saveWindow } from './agentSave';
+import { resolveWindow, saveWindow } from './agentSave';
 import {
   createSnapshotFromUrls,
   renameSnapshotTo,
@@ -35,6 +37,7 @@ import {
 } from './agentSnapshots';
 import { BridgeFailure } from './bridgeFailure';
 import { getCategories, getSnapshotsInCategory } from './categories';
+import { findDuplicateTabs } from './duplicateTabs';
 import { resolveLazyTab } from './lazyTab';
 import { getManagedTabIds } from './managedTabs';
 import { shapeOpenWindows } from './openWindows';
@@ -45,6 +48,7 @@ import { queryTokens, searchTabs } from './searchTabs';
 import { getSiteStats } from './siteStats';
 import { findStaleTabs } from './staleTabs';
 import { buildUsageStats } from './usageStats';
+import { summarizeWindow } from './windowSummary';
 import { restoreSnapshot } from './restore';
 import { getSnapshots } from './storage';
 import type { Category, Snapshot } from './types';
@@ -179,6 +183,15 @@ export function parseUsageParams(params: unknown): { limit: number } {
   return { limit: Math.min(limit ?? 5, MAX_USAGE_ITEMS) };
 }
 
+/** An optional windowId, shared by the tools that look at one window. */
+export function parseWindowIdParam(params: unknown): { windowId: number | undefined } {
+  const { windowId } = (params ?? {}) as { windowId?: unknown };
+  if (windowId !== undefined && (typeof windowId !== 'number' || !Number.isInteger(windowId))) {
+    throw new BridgeFailure('invalid_params', 'windowId must be a window id from list_open_windows.');
+  }
+  return { windowId: windowId as number | undefined };
+}
+
 export const handlers: HandlerTable = {
   hello: async (): Promise<HelloResult> => ({
     protocol: PROTOCOL_VERSION,
@@ -262,6 +275,33 @@ export const handlers: HandlerTable = {
       (await getSnapshots()).flatMap((s) => (s.linkedWindowId === null ? [] : [s.linkedWindowId])),
     );
     return openUrls(urls, newWindow, snapshotWindowIds);
+  },
+  findDuplicateTabs: async (params): Promise<FindDuplicateTabsResult> => {
+    const { windowId } = parseWindowIdParam(params);
+    const open = await loadOpenWindows(Number.MAX_SAFE_INTEGER);
+    if (windowId !== undefined && !open.windows.some((w) => w.windowId === windowId)) {
+      throw new BridgeFailure(
+        'not_found',
+        'No such window with tabs to look at. Call list_open_windows for current window ids.',
+      );
+    }
+    return findDuplicateTabs({ windows: open.windows, windowId });
+  },
+  summarizeWindow: async (params): Promise<WindowSummary> => {
+    const { windowId: requested } = parseWindowIdParam(params);
+    const windowId = await resolveWindow(requested);
+    const [open, snapshots] = await Promise.all([
+      loadOpenWindows(Number.MAX_SAFE_INTEGER),
+      getSnapshots(),
+    ]);
+    const window = open.windows.find((w) => w.windowId === windowId);
+    if (!window) {
+      throw new BridgeFailure(
+        'not_found',
+        'That window has no tabs to summarize (it may hold only TabBuddy pages). Call list_open_windows to pick another.',
+      );
+    }
+    return summarizeWindow({ window, snapshots, now: Date.now() });
   },
   searchTabs: async (params): Promise<SearchTabsResult> => {
     const { query, scope, limit } = parseSearchParams(params);

@@ -49,7 +49,7 @@ export function parseSaveWindowParams(params: unknown): ParsedSaveWindow {
 /** The window to save: the one asked for, else the one the user used last.
  * Incognito windows are reported as missing (the bridge never touches them),
  * and only ordinary browser windows can be saved. */
-async function resolveWindow(windowId: number | undefined): Promise<number> {
+export async function resolveWindow(windowId: number | undefined): Promise<number> {
   const notFound = new BridgeFailure(
     'not_found',
     'No such window. Call list_open_windows for current window ids.',

@@ -19,7 +19,9 @@ export type Method =
   | 'createSnapshotFromUrls'
   | 'updateSnapshotFromWindow'
   | 'renameSnapshot'
-  | 'tagSnapshots';
+  | 'tagSnapshots'
+  | 'findDuplicateTabs'
+  | 'summarizeWindow';
 
 export type ErrorCode =
   | 'unknown_method'
@@ -361,4 +363,92 @@ export interface TagSnapshotsParams {
 export interface TagSnapshotsResult {
   categories: CategoryUse[];
   tagged: number;
+}
+
+/** Most duplicate groups `findDuplicateTabs` returns in one call. */
+export const MAX_DUPLICATE_GROUPS = 50;
+
+export interface FindDuplicateTabsParams {
+  /** Only look within this window. Default: across all open windows. */
+  windowId?: number;
+}
+
+export interface DuplicateTab {
+  tabId: number;
+  windowId: number;
+  title: string;
+  lastAccessed: number | null;
+  active: boolean;
+  pinned: boolean;
+  audible: boolean;
+  managed: boolean;
+}
+
+export interface DuplicateGroup {
+  /** The address of the tab to keep. */
+  url: string;
+  /** The tab worth keeping: the active, pinned, snapshot-managed, playing or most recently used one. */
+  keepTabId: number;
+  /** All the tabs on this page, the one to keep first. */
+  tabs: DuplicateTab[];
+  /** The others: what could be closed. */
+  extraTabIds: number[];
+}
+
+export interface FindDuplicateTabsResult {
+  groups: DuplicateGroup[];
+  /** All duplicate groups found, before the cap. */
+  groupCount: number;
+  /** Tabs beyond the first in every group, i.e. how many could go. */
+  extraTabCount: number;
+  truncated: boolean;
+}
+
+export interface SummarizeWindowParams {
+  /** Default: the window the user used last. */
+  windowId?: number;
+}
+
+/** Most sites listed in a window summary; the rest are counted in otherSites. */
+export const MAX_SUMMARY_SITES = 15;
+export const MAX_SUMMARY_FLAGGED = 20;
+export const MAX_SUMMARY_SAVED_ELSEWHERE = 50;
+
+export interface SiteSummary {
+  domain: string;
+  tabCount: number;
+  /** Tabs from this site not used for over a day. */
+  idleOverDay: number;
+  /** A few titles, to show what the tabs are. */
+  sampleTitles: string[];
+  tabIds: number[];
+}
+
+export interface WindowSummary {
+  windowId: number;
+  focused: boolean;
+  /** The saved snapshot this window was opened from, if any. */
+  snapshot: { id: string; name: string } | null;
+  tabCount: number;
+  counts: {
+    pinned: number;
+    playing: number;
+    /** Belong to a snapshot's live window. */
+    managed: number;
+    /** TabBuddy placeholders that have not loaded yet. */
+    lazy: number;
+    /** Empty "new tab" pages. */
+    blank: number;
+  };
+  /** How long since the user last looked at each tab; every tab is in exactly one bucket. */
+  idle: { underHour: number; underDay: number; underWeek: number; overWeek: number; unknown: number };
+  /** The biggest sites first; each with the ids of its tabs. */
+  sites: SiteSummary[];
+  otherSites: { sites: number; tabs: number };
+  /** Same-page tabs in this window; find_duplicate_tabs has the details. */
+  duplicates: { groups: number; extraTabs: number };
+  /** Open tabs whose page is already saved in another snapshot (so closing them loses nothing). */
+  savedElsewhere: { count: number; tabs: { tabId: number; snapshotName: string }[] };
+  /** Tabs that look like they might hold work in progress (an email being written, a form, a checkout). A guess from the address and title only. */
+  mayHaveUnsavedWork: { total: number; tabs: { tabId: number; title: string; reason: string }[] };
 }

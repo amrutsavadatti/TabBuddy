@@ -30,6 +30,7 @@ const textOf = (result: any) => result.content[0].text as string;
 
 describe('tools', () => {
   const READ_ONLY = [
+    'find_duplicate_tabs',
     'get_snapshot',
     'get_stale_tabs',
     'get_usage_stats',
@@ -37,6 +38,7 @@ describe('tools', () => {
     'list_open_windows',
     'list_snapshots',
     'search_tabs',
+    'summarize_window',
   ];
   const WRITES = [
     'create_snapshot_from_urls',
@@ -49,7 +51,7 @@ describe('tools', () => {
     'update_snapshot_from_window',
   ];
 
-  it('offers seven read-only tools and eight that change things', async () => {
+  it('offers nine read-only tools and eight that change things', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...READ_ONLY, ...WRITES].sort());
@@ -228,6 +230,39 @@ describe('tools', () => {
       expect(result instanceof Error || result.isError === true).toBe(true);
     }
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('summarize_window and find_duplicate_tabs forward a window id, and send no params without one', async () => {
+    const send = vi.fn(async () => ({}));
+    const client = await connect(send);
+    await client.callTool({ name: 'summarize_window', arguments: { windowId: 7 } });
+    expect(send).toHaveBeenLastCalledWith('summarizeWindow', { windowId: 7 });
+    await client.callTool({ name: 'summarize_window', arguments: {} });
+    expect(send).toHaveBeenLastCalledWith('summarizeWindow', undefined);
+    await client.callTool({ name: 'find_duplicate_tabs', arguments: { windowId: 9 } });
+    expect(send).toHaveBeenLastCalledWith('findDuplicateTabs', { windowId: 9 });
+    await client.callTool({ name: 'find_duplicate_tabs', arguments: {} });
+    expect(send).toHaveBeenLastCalledWith('findDuplicateTabs', undefined);
+  });
+
+  it('rejects a non-integer window id without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    for (const name of ['summarize_window', 'find_duplicate_tabs']) {
+      for (const windowId of [1.5, '7']) {
+        const result = await client.callTool({ name, arguments: { windowId } }).catch((e) => e);
+        expect(result instanceof Error || result.isError === true).toBe(true);
+      }
+    }
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('tells the model that summarize_window only sees titles and addresses', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const description = tools.find((t) => t.name === 'summarize_window')!.description!;
+    expect(description).toContain('never page contents');
+    expect(description).toContain('ask what the window');
   });
 
   it('rejects malformed save_window arguments without calling the browser', async () => {

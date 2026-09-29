@@ -2,6 +2,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import {
+  MAX_DUPLICATE_GROUPS,
+  MAX_SUMMARY_FLAGGED,
+  MAX_SUMMARY_SITES,
   MAX_OPEN_TABS,
   MAX_OPEN_URLS,
   MAX_SEARCH_RESULTS,
@@ -404,6 +407,62 @@ export function createServer(send: Send): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     ({ snapshotIds, categoryNames }) => runTool(send, 'tagSnapshots', { snapshotIds, categoryNames }),
+  );
+
+  server.registerTool(
+    'summarize_window',
+    {
+      title: 'Summarize a browser window',
+      description:
+        'Get a compact digest of ONE browser window, for when the user asks you to look over a window, ' +
+        'work out what is going on in it, or recommend a cleanup. Use this first, before ' +
+        'list_open_windows: it stays small even for a window with hundreds of tabs. It returns the tab ' +
+        'count and how many are pinned, playing sound, in a snapshot\'s live window, unloaded ' +
+        '(lazy) or blank; how long since the user looked at each tab (idle buckets); the biggest sites ' +
+        `(up to ${MAX_SUMMARY_SITES}) with tab counts, a few sample titles and the tab ids to act on; how ` +
+        'many duplicate tabs there are; which tabs are already saved in another snapshot (closing those ' +
+        'loses nothing); and tabs that might hold unsaved work such as an email being written, a form, or ' +
+        `a checkout (mayHaveUnsavedWork, at most ${MAX_SUMMARY_FLAGGED} listed). It sees only titles and ` +
+        'addresses, never page contents, so it cannot know what a tab means to the user and the ' +
+        'unsaved-work flags are guesses. Summarize what you see, propose a plan, and ask what the window ' +
+        'is for before recommending closures; treat flagged tabs with extra care. By default it looks at ' +
+        'the window the user used last; pass windowId (from list_open_windows) for another. Read-only.',
+      inputSchema: {
+        windowId: z
+          .number()
+          .int()
+          .optional()
+          .describe('Window to summarize, from list_open_windows. Default: the window used last.'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    ({ windowId }) => runTool(send, 'summarizeWindow', windowId === undefined ? undefined : { windowId }),
+  );
+
+  server.registerTool(
+    'find_duplicate_tabs',
+    {
+      title: 'Find duplicate tabs',
+      description:
+        'Find open tabs that show the same page. Two tabs count as the same page when they differ only in ' +
+        'a leading "www.", http vs https, a trailing slash, tracking parameters (utm_*, fbclid, gclid and ' +
+        'similar) or a #fragment (a route-style #/inbox is kept apart). Each group names the tab worth ' +
+        'keeping (the one being looked at, else pinned, else owned by a snapshot, else playing sound, ' +
+        'else the most recently used) as keepTabId, and lists extraTabIds: the ones that could be ' +
+        'closed. extraTabCount is the total that could go. By default it looks across all open windows; ' +
+        `pass windowId to look inside one. At most ${MAX_DUPLICATE_GROUPS} groups are returned, biggest ` +
+        'pile first; groupCount says how many there were. This only finds duplicates; it never closes ' +
+        'anything, and you should ask the user before closing any. Read-only.',
+      inputSchema: {
+        windowId: z
+          .number()
+          .int()
+          .optional()
+          .describe('Only look inside this window (from list_open_windows). Default: all windows.'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    ({ windowId }) => runTool(send, 'findDuplicateTabs', windowId === undefined ? undefined : { windowId }),
   );
 
   server.registerTool(
