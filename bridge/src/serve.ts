@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import {
   MAX_OPEN_TABS,
+  MAX_OPEN_URLS,
   MAX_SEARCH_RESULTS,
   MAX_STALE_TABS,
   MAX_USAGE_ITEMS,
@@ -207,6 +208,67 @@ export function createServer(send: Send): McpServer {
       annotations: { readOnlyHint: true },
     },
     ({ limit }) => runTool(send, 'getUsageStats', limit === undefined ? undefined : { limit }),
+  );
+
+  server.registerTool(
+    'restore_snapshot',
+    {
+      title: 'Open a saved snapshot',
+      description:
+        "Open one of the user's saved snapshots (get the id from list_snapshots). Its tabs open together in " +
+        'a new browser window, with pinned tabs and tab groups restored, and the window comes to the front. ' +
+        'If the snapshot is already open, its existing window is brought to the front instead, so no ' +
+        'duplicate is made (reusedExistingWindow says which happened). It counts as a use of the snapshot. ' +
+        "Depending on the user's lazy-loading setting, only the first tab may load at once and the rest " +
+        'load when the user clicks them. Use it when the user asks to open or switch to a workspace. ' +
+        'Nothing is closed or changed in the snapshot.',
+      inputSchema: { id: z.string().min(1).describe('Snapshot id, from list_snapshots.') },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    ({ id }) => runTool(send, 'restoreSnapshot', { id }),
+  );
+
+  server.registerTool(
+    'focus_tab',
+    {
+      title: 'Switch to an open tab',
+      description:
+        'Switch to one open tab and bring its window to the front. Get tab ids from list_open_windows or ' +
+        'search_tabs. Use it when the user asks to go to a page that is already open. Fails with ' +
+        'not_found if the tab has been closed since you listed it, in which case list again. ' +
+        'Nothing is closed or changed.',
+      inputSchema: {
+        tabId: z.number().int().describe('Tab id, from list_open_windows or search_tabs.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    ({ tabId }) => runTool(send, 'focusTab', { tabId }),
+  );
+
+  server.registerTool(
+    'open_urls',
+    {
+      title: 'Open web pages',
+      description:
+        "Open web pages in the user's browser: as new tabs in the window they used last (the first comes " +
+        'to the front, the rest open behind it), or all together in a new window with newWindow. If the ' +
+        'window they used last belongs to a saved snapshot, a new window is used instead so the pages ' +
+        'are not saved into that snapshot by accident (openedInNewWindow tells you). Only ' +
+        `http and https addresses are allowed, up to ${MAX_OPEN_URLS} at a time; if any address is not ` +
+        'valid, nothing is opened and the error names it. It does not check whether a page is already ' +
+        'open (use list_open_windows or search_tabs and focus_tab for that) and does not save anything. ' +
+        'Only open pages the user asked for.',
+      inputSchema: {
+        urls: z
+          .array(z.string().min(1))
+          .min(1)
+          .max(MAX_OPEN_URLS)
+          .describe('Full web addresses starting with http:// or https://.'),
+        newWindow: z.boolean().optional().describe('Open in a new window instead of the current one. Default false.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    ({ urls, newWindow }) => runTool(send, 'openUrls', { urls, newWindow }),
   );
 
   server.registerTool(

@@ -13,7 +13,7 @@ import {
 } from './agentBridge';
 import { addCategory, setSnapshotCategories } from './categories';
 import { setManagedTabs } from './managedTabs';
-import { addSnapshot } from './storage';
+import { addSnapshot, getSnapshots } from './storage';
 import { makeSnapshot, makeTab } from '@/test/factories';
 
 describe('dispatch', () => {
@@ -422,5 +422,81 @@ describe('getUsageStats', () => {
     const off = (await dispatch({ id: 'u', method: 'getUsageStats' })) as any;
     expect(off.result.topSites).toEqual([]);
     expect(off.result.siteTrackingEnabled).toBe(false);
+  });
+});
+
+describe('restoreSnapshot', () => {
+  const call = (params: unknown) => dispatch({ id: 'r', method: 'restoreSnapshot', params });
+
+  it('opens the snapshot in a new window, links it, and counts the use', async () => {
+    const snapshot = makeSnapshot({
+      name: 'Job Hunt',
+      usageCount: 2,
+      tabs: [makeTab({ url: 'https://a.test/' }), makeTab({ url: 'https://b.test/' })],
+    });
+    await addSnapshot(snapshot);
+
+    const response = (await call({ id: snapshot.id })) as any;
+    expect(response.result).toMatchObject({ snapshotName: 'Job Hunt', tabCount: 2, reusedExistingWindow: false });
+
+    const [stored] = await getSnapshots();
+    expect(stored!.usageCount).toBe(3);
+    expect(stored!.linkedWindowId).toBe(response.result.windowId);
+  });
+
+  it('brings an already-open snapshot forward instead of opening a duplicate', async () => {
+    const win = (await fakeBrowser.windows.create({}))!;
+    const snapshot = makeSnapshot({ linkedWindowId: win.id ?? null, usageCount: 5 });
+    await addSnapshot(snapshot);
+    const windowsBefore = (await fakeBrowser.windows.getAll()).length;
+
+    const response = (await call({ id: snapshot.id })) as any;
+    expect(response.result).toMatchObject({ windowId: win.id, reusedExistingWindow: true });
+    expect((await fakeBrowser.windows.getAll()).length).toBe(windowsBefore);
+    expect((await getSnapshots())[0]!.usageCount).toBe(6);
+  });
+
+  it('answers not_found, invalid_params, and refuses an empty snapshot', async () => {
+    expect(await call({ id: 'missing' })).toMatchObject({ error: { code: 'not_found' } });
+    expect(await call({})).toMatchObject({ error: { code: 'invalid_params' } });
+    const empty = makeSnapshot({ name: 'Empty', tabs: [] });
+    await addSnapshot(empty);
+    const response = (await call({ id: empty.id })) as any;
+    expect(response.error).toMatchObject({ code: 'invalid_params' });
+    expect(response.error.message).toContain('Empty');
+  });
+});
+
+describe('openUrls and focusTab through the dispatcher', () => {
+  it('refuses a javascript: address without opening anything', async () => {
+    const create = vi.spyOn(fakeBrowser.windows, 'create');
+    const response = await dispatch({ id: 'o', method: 'openUrls', params: { urls: ['javascript:alert(1)'] } });
+    expect(response).toMatchObject({ error: { code: 'invalid_params' } });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('reports not_found when focusing a tab that does not exist', async () => {
+    vi.spyOn(fakeBrowser.tabs, 'get').mockRejectedValue(new Error('gone'));
+    expect(await dispatch({ id: 'f', method: 'focusTab', params: { tabId: 1 } })).toMatchObject({
+      error: { code: 'not_found' },
+    });
+  });
+});
+
+describe('openUrls avoids snapshot windows', () => {
+  it('opens in a new window when the window used last is linked to a snapshot', async () => {
+    const win = (await fakeBrowser.windows.create({}))!;
+    await addSnapshot(makeSnapshot({ linkedWindowId: win.id ?? null }));
+    vi.spyOn(fakeBrowser.windows, 'getLastFocused').mockResolvedValue({ id: win.id, incognito: false } as never);
+    vi.spyOn(fakeBrowser.windows, 'create').mockResolvedValue({
+      id: 77,
+      tabs: [{ id: 770, url: 'https://a.test/' }],
+    } as never);
+    const tabsCreate = vi.spyOn(fakeBrowser.tabs, 'create');
+
+    const response = (await dispatch({ id: 'o', method: 'openUrls', params: { urls: ['https://a.test/'] } })) as any;
+
+    expect(tabsCreate).not.toHaveBeenCalled();
+    expect(response.result).toMatchObject({ windowId: 77, openedInNewWindow: true });
   });
 });

@@ -11,7 +11,10 @@ export type Method =
   | 'listOpenWindows'
   | 'searchTabs'
   | 'getStaleTabs'
-  | 'getUsageStats';
+  | 'getUsageStats'
+  | 'restoreSnapshot'
+  | 'focusTab'
+  | 'openUrls';
 
 export type ErrorCode =
   | 'unknown_method'
@@ -225,4 +228,44 @@ export interface UsageStats {
   topSites: { domain: string; score: number }[];
   /** False when the user has turned off Quick links; no sites are reported then. */
   siteTrackingEnabled: boolean;
+}
+
+export interface RestoreSnapshotParams {
+  id: string;
+}
+
+export interface RestoreSnapshotResult {
+  windowId: number;
+  snapshotName: string;
+  tabCount: number;
+  /** True if the snapshot was already open and its window was brought to the front. */
+  reusedExistingWindow: boolean;
+}
+
+export interface FocusTabParams {
+  tabId: number;
+}
+
+export interface FocusTabResult {
+  tabId: number;
+  windowId: number;
+  title: string;
+  url: string;
+}
+
+/** Most URLs `openUrls` opens in one call. */
+export const MAX_OPEN_URLS = 25;
+
+export interface OpenUrlsParams {
+  urls: string[];
+  /** Open in a new window instead of the current one. */
+  newWindow?: boolean;
+}
+
+export interface OpenUrlsResult {
+  windowId: number;
+  /** True if the pages went into a new window: asked for, or because the
+   * window the user used last belongs to a saved snapshot (or is incognito). */
+  openedInNewWindow: boolean;
+  tabs: { tabId: number; url: string }[];
 }

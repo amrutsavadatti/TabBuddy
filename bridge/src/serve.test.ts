@@ -29,21 +29,33 @@ async function connect(send: Send) {
 const textOf = (result: any) => result.content[0].text as string;
 
 describe('tools', () => {
-  it('offers the seven read-only tools', async () => {
+  const READ_ONLY = [
+    'get_snapshot',
+    'get_stale_tabs',
+    'get_usage_stats',
+    'list_categories',
+    'list_open_windows',
+    'list_snapshots',
+    'search_tabs',
+  ];
+  const WRITES = ['focus_tab', 'open_urls', 'restore_snapshot'];
+
+  it('offers seven read-only tools and three that change the browser', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual([
-      'get_snapshot',
-      'get_stale_tabs',
-      'get_usage_stats',
-      'list_categories',
-      'list_open_windows',
-      'list_snapshots',
-      'search_tabs',
-    ]);
-    for (const tool of tools) {
+    expect(tools.map((t) => t.name).sort()).toEqual([...READ_ONLY, ...WRITES].sort());
+    for (const tool of tools) expect(tool.description!.length).toBeGreaterThan(80);
+    for (const tool of tools.filter((t) => READ_ONLY.includes(t.name))) {
       expect(tool.annotations?.readOnlyHint).toBe(true);
-      expect(tool.description!.length).toBeGreaterThan(80);
+    }
+  });
+
+  it('marks the write tools as not read-only and not destructive', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    for (const tool of tools.filter((t) => WRITES.includes(t.name))) {
+      expect(tool.annotations?.readOnlyHint).toBe(false);
+      expect(tool.annotations?.destructiveHint).toBe(false);
     }
   });
 
@@ -130,6 +142,49 @@ describe('tools', () => {
       expect(result instanceof Error || result.isError === true).toBe(true);
     }
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('restore_snapshot, focus_tab and open_urls forward their arguments', async () => {
+    const send = vi.fn(async () => ({ ok: true }));
+    const client = await connect(send);
+    await client.callTool({ name: 'restore_snapshot', arguments: { id: 'abc' } });
+    expect(send).toHaveBeenLastCalledWith('restoreSnapshot', { id: 'abc' });
+    await client.callTool({ name: 'focus_tab', arguments: { tabId: 42 } });
+    expect(send).toHaveBeenLastCalledWith('focusTab', { tabId: 42 });
+    await client.callTool({ name: 'open_urls', arguments: { urls: ['https://a.test/'], newWindow: true } });
+    expect(send).toHaveBeenLastCalledWith('openUrls', { urls: ['https://a.test/'], newWindow: true });
+  });
+
+  it('rejects malformed write arguments without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    const attempts = [
+      { name: 'restore_snapshot', arguments: {} },
+      { name: 'restore_snapshot', arguments: { id: '' } },
+      { name: 'focus_tab', arguments: { tabId: '12' } },
+      { name: 'focus_tab', arguments: { tabId: 1.5 } },
+      { name: 'open_urls', arguments: { urls: [] } },
+      { name: 'open_urls', arguments: { urls: 'https://a.test/' } },
+      { name: 'open_urls', arguments: { urls: Array(26).fill('https://a.test/') } },
+      { name: 'open_urls', arguments: { urls: ['https://a.test/'], newWindow: 'yes' } },
+    ];
+    for (const attempt of attempts) {
+      const result = await client.callTool(attempt).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('shows the extension\'s refusal of a bad address to the agent', async () => {
+    const client = await connect(async () => {
+      throw new BridgeCallError({
+        code: 'invalid_params',
+        message: 'Only http and https addresses can be opened. Nothing was opened. Not valid: javascript:x',
+      });
+    });
+    const result = await client.callTool({ name: 'open_urls', arguments: { urls: ['javascript:x'] } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('Nothing was opened');
   });
 
   it('get_snapshot forwards its arguments', async () => {

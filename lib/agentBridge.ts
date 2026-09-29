@@ -3,10 +3,12 @@ import {
   type BridgeError,
   type BridgeRequest,
   type BridgeResponse,
-  type ErrorCode,
   type CategorySummary,
   type GetSnapshotParams,
+  type FocusTabResult,
   type GetStaleTabsParams,
+  type OpenUrlsResult,
+  type RestoreSnapshotResult,
   type GetUsageStatsParams,
   type StaleTabsResult,
   type UsageStats,
@@ -23,6 +25,8 @@ import {
   MAX_SNAPSHOT_TABS_PER_CALL,
   MAX_TITLE_LENGTH,
 } from '../bridge/protocol';
+import { focusTab, openUrls, parseOpenUrlsParams, parseTabId } from './agentOpen';
+import { BridgeFailure } from './bridgeFailure';
 import { getCategories, getSnapshotsInCategory } from './categories';
 import { resolveLazyTab } from './lazyTab';
 import { getManagedTabIds } from './managedTabs';
@@ -34,18 +38,11 @@ import { queryTokens, searchTabs } from './searchTabs';
 import { getSiteStats } from './siteStats';
 import { findStaleTabs } from './staleTabs';
 import { buildUsageStats } from './usageStats';
+import { restoreSnapshot } from './restore';
 import { getSnapshots } from './storage';
 import type { Category, Snapshot } from './types';
 
-/** A failure a handler wants reported with a specific code. */
-export class BridgeFailure extends Error {
-  constructor(
-    readonly code: ErrorCode,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+export { BridgeFailure };
 
 export type Handler = (params: unknown) => Promise<unknown>;
 export type HandlerTable = Record<string, Handler>;
@@ -224,6 +221,35 @@ export const handlers: HandlerTable = {
       getQuickLinksEnabled(),
     ]);
     return buildUsageStats({ snapshots, siteStats, siteTrackingEnabled, now: Date.now(), count: limit });
+  },
+  restoreSnapshot: async (params): Promise<RestoreSnapshotResult> => {
+    const { id } = (params ?? {}) as { id?: unknown };
+    if (typeof id !== 'string' || id === '') {
+      throw new BridgeFailure('invalid_params', 'id must be a snapshot id from list_snapshots.');
+    }
+    const snapshot = (await getSnapshots()).find((s) => s.id === id);
+    if (!snapshot) {
+      throw new BridgeFailure('not_found', 'No snapshot with that id. Call list_snapshots for current ids.');
+    }
+    if (snapshot.tabs.length === 0) {
+      throw new BridgeFailure('invalid_params', `"${snapshot.name}" has no tabs, so there is nothing to open.`);
+    }
+    const windowId = await restoreSnapshot(snapshot);
+    return {
+      windowId,
+      snapshotName: snapshot.name,
+      tabCount: snapshot.tabs.length,
+      // a brand-new window can never share the id of the one it was linked to
+      reusedExistingWindow: windowId === snapshot.linkedWindowId,
+    };
+  },
+  focusTab: (params): Promise<FocusTabResult> => focusTab(parseTabId(params)),
+  openUrls: async (params): Promise<OpenUrlsResult> => {
+    const { urls, newWindow } = parseOpenUrlsParams(params);
+    const snapshotWindowIds = new Set(
+      (await getSnapshots()).flatMap((s) => (s.linkedWindowId === null ? [] : [s.linkedWindowId])),
+    );
+    return openUrls(urls, newWindow, snapshotWindowIds);
   },
   searchTabs: async (params): Promise<SearchTabsResult> => {
     const { query, scope, limit } = parseSearchParams(params);
