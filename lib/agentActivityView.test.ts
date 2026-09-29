@@ -167,3 +167,48 @@ describe('groupActivity', () => {
     expect(groupActivity(log).flatMap((g) => g.entries.map((e) => e.id))).toEqual(['e', 'd', 'c', 'b', 'a']);
   });
 });
+
+describe('describeUndoResult for a triage plan', () => {
+  const base = { action: 'undo' as const, undid: 'triage' as const };
+  const reopen = (restored: number, reopened: number, failed = 0) => ({ restored, reopened, failed });
+
+  it('says what came back and what was taken back', () => {
+    const r: UndoResult = {
+      ...base,
+      reopen: reopen(4, 2),
+      removedFromArchived: 2,
+      removedFromSnapshots: 1,
+      deletedSnapshots: 1,
+      keptSnapshots: 0,
+    };
+    expect(describeUndoResult(r)).toBe(
+      'Reopened 6 tabs and took back what the plan saved (2 tabs out of the archive, 1 tab out of snapshots, 1 new snapshot deleted)',
+    );
+  });
+
+  it('mentions a new snapshot that was kept, and tabs that would not reopen', () => {
+    const r: UndoResult = {
+      ...base,
+      reopen: reopen(3, 0, 2),
+      removedFromArchived: 0,
+      removedFromSnapshots: 0,
+      deletedSnapshots: 0,
+      keptSnapshots: 2,
+    };
+    expect(describeUndoResult(r)).toBe(
+      'Reopened 3 tabs and took back what the plan saved (2 new snapshots kept); 2 could not be reopened',
+    );
+  });
+
+  it('is short when the plan only closed tabs', () => {
+    const r: UndoResult = {
+      ...base,
+      reopen: reopen(1, 0),
+      removedFromArchived: 0,
+      removedFromSnapshots: 0,
+      deletedSnapshots: 0,
+      keptSnapshots: 0,
+    };
+    expect(describeUndoResult(r)).toBe('Reopened 1 tab');
+  });
+});

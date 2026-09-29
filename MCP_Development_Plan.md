@@ -592,12 +592,28 @@ may hold unsaved work (guessed from address and title only).
 needs. It skips duplicates and reports every skip.
 **Commit:** `feat(bridge): add tabs and links to an existing snapshot`
 
-### 🔲 Slice T4 — One confirmed triage plan
-**Build:** `propose_triage_plan` takes buckets (leave alone, close, file into
-snapshot X, file into a new snapshot), checks every tab, and returns one
-proposal. Confirming it saves the snapshot first and only then closes, so a
-failed save closes nothing. Depends on X1–X3.
-**Test:** unit tests for validation and ordering; manual on a large window.
+### ✅ Slice T4 — One confirmed triage plan
+**Build:** `propose_triage_plan` takes up to four buckets (close, archive, file
+into existing snapshots by id, save as new snapshots with optional categories),
+each tab in exactly one, up to 300 tabs in all. Tabs not listed stay open.
+Confirming goes through the same `confirm_proposal`:
+- every tab is checked again, and the snapshots to file into must still exist;
+  if anything changed, nothing is touched;
+- phase one saves everything (new snapshots, tabs added to existing ones, the
+  archive) and is rolled back if any write fails, with nothing closed yet;
+- phase two closes every tab;
+- one activity entry, and one undo, covers the whole plan.
+
+Undo reopens the tabs and takes back only what the plan saved, and only for tabs
+that really came back. A new snapshot the plan made is deleted only if nobody has
+touched it since and all its tabs are back; otherwise it is kept and reported.
+The shared per-tab checks moved into `proposalChecks.ts` so single-tab and triage
+proposals use the same rules.
+
+**Test:** unit tests for validation, proposing, the save-before-close order, the
+rollback, and each undo case; live with throwaway tabs (propose changes nothing,
+confirm, undo, back to the start).
+**Commit:** `feat(bridge): plan a whole cleanup in one confirmed triage plan`
 
 ### 🔲 Slice T5 — Manual triage for the unsure tabs
 **Build:** `start_manual_triage(windowId, tabIds?)` opens the existing

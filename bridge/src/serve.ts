@@ -16,6 +16,7 @@ import {
   MAX_SNAPSHOT_NAME_LENGTH,
   MAX_SNAPSHOT_URLS,
   MAX_TAG_TARGETS,
+  MAX_TRIAGE_TABS,
   MAX_STALE_TABS,
   MAX_USAGE_ITEMS,
   MAX_SNAPSHOT_TABS_PER_CALL,
@@ -351,6 +352,9 @@ export function createServer(send: Send): McpServer {
           'category when one fits rather than inventing a near-duplicate.',
       );
 
+  const tabIdList = (what: string) =>
+    z.array(z.number().int()).min(1).max(MAX_TRIAGE_TABS).describe(`${what} Tab ids from list_open_windows, search_tabs or summarize_window.`);
+
   server.registerTool(
     'create_snapshot_from_urls',
     {
@@ -637,13 +641,68 @@ export function createServer(send: Send): McpServer {
   );
 
   server.registerTool(
+    'propose_triage_plan',
+    {
+      title: 'Propose a whole cleanup of a window (step 1 of 2)',
+      description:
+        'Plan the cleanup of a window with many tabs in one go, and confirm it once: better than proposing ' +
+        'each kind of change separately. Use it after summarize_window and find_duplicate_tabs when the ' +
+        'user wants a window sorted out. Put each tab in exactly ONE bucket. "close" closes WITHOUT saving ' +
+        '(duplicate extras, blank pages, pages summarize_window lists under savedElsewhere). "archive" ' +
+        'saves to the Archived snapshot and then closes: the safe default for "probably do not need it". ' +
+        '"fileInto" adds to an EXISTING snapshot (by id from list_snapshots) and then closes: for tabs ' +
+        'that belong with something the user already saved. "newSnapshots" saves a group together under ' +
+        'a new name, optionally with categories, and then closes: for a set worth keeping. Tabs you do ' +
+        'not list stay open, which is the right place for tabs you are unsure about: leave them, and ' +
+        'tell the user which ones so they can decide (or sort them one by one in TabBuddy). Pass ' +
+        'windowId to learn how many tabs stay open. It changes NOTHING. It returns a proposalId, a ' +
+        'summary, the steps bucket by bucket with each tab\'s title and page, totals, leftOpen, and ' +
+        '"skipped": tabs left out and why (pinned, playing sound, in a snapshot\'s open window, private, ' +
+        'or TabBuddy\'s own; includeProtected overrides the first three, only when the user explicitly ' +
+        'asked for those very tabs). Show the user the plan bucket by bucket, by title (never raw ids), ' +
+        'and get a clear yes before calling confirm_proposal; if they want tabs moved between buckets, ' +
+        'propose again. Always ask for a plan of more than a few tabs. Confirming saves everything first ' +
+        'and only then closes the tabs, checks every tab again, and changes nothing if any has changed; ' +
+        `the whole plan can be undone with undo. A plan lasts 5 minutes and works once; up to ${MAX_TRIAGE_TABS} tabs.`,
+      inputSchema: {
+        close: tabIdList('Tabs to close without saving them.').optional(),
+        archive: tabIdList('Tabs to archive (save to the Archived snapshot, then close).').optional(),
+        fileInto: z
+          .array(z.object({ id: z.string().min(1).describe('Snapshot id, from list_snapshots.'), tabIds: tabIdList('Tabs to add to it, then close.') }))
+          .optional()
+          .describe('Tabs to add to existing snapshots, then close, one entry per snapshot.'),
+        newSnapshots: z
+          .array(
+            z.object({
+              name: z.string().min(1).max(MAX_SNAPSHOT_NAME_LENGTH).describe('What to call the new snapshot.'),
+              tabIds: tabIdList('Tabs to save in it, then close.'),
+              categoryNames: categoryNames('Categories to file the new snapshot under.').optional(),
+            }),
+          )
+          .optional()
+          .describe('Tabs to save together as new snapshots, then close, one entry per snapshot.'),
+        windowId: z.number().int().optional().describe('The window the plan is about, from list_open_windows. Only used to say how many of its tabs stay open.'),
+        includeProtected: z
+          .boolean()
+          .optional()
+          .describe('Also plan pinned tabs, tabs playing sound and snapshot-owned tabs. Only if the user explicitly asked for those tabs.'),
+        request: requestField,
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    (plan) => runTool(send, 'proposeTriagePlan', plan),
+  );
+
+  server.registerTool(
     'confirm_proposal',
     {
       title: 'Carry out a proposal (step 2 of 2)',
       description:
         'Step 2 of 2: carries out a proposal from a propose_ tool. For propose_archive_tabs this ARCHIVES ' +
         'AND CLOSES the tabs; for propose_close_tabs it CLOSES them WITHOUT saving them; for ' +
-        'propose_remove_from_snapshot it REMOVES saved tabs from a snapshot for good. Only call it after ' +
+        'propose_remove_from_snapshot it REMOVES saved tabs from a snapshot for good; for ' +
+        'propose_triage_plan it SAVES everything the plan files away and then CLOSES all its tabs. Only ' +
+        'call it after ' +
         'the user has agreed to the exact list you showed them (see propose_archive_tabs for when asking ' +
         'can be skipped). A proposal works once and for five minutes only. Before acting, everything is ' +
         'checked again: if an open tab has been closed, now shows a different page, or has become pinned ' +
@@ -689,7 +748,9 @@ export function createServer(send: Send): McpServer {
       description:
         'Reverse one earlier archive, close or removal of saved tabs, using the undoId from ' +
         'confirm_proposal or the id of an undoable entry from get_agent_activity. Archive: reopens the ' +
-        'tabs and takes them back out of the Archived snapshot. Close: reopens the tabs. Remove from a ' +
+        'tabs and takes them back out of the Archived snapshot. Close: reopens the tabs. Triage plan: ' +
+        'reopens the tabs, takes back what the plan saved, and deletes the new snapshots it made if ' +
+        'nobody has touched them since ("kept" says which were left). Remove from a ' +
         'snapshot: puts the saved tabs back at their original positions (snapshotChangedSince says if the ' +
         'snapshot changed meanwhile, so positions may differ). A closed tab the browser still remembers ' +
         '(its last 25) is restored with its history and scroll position; any other opens fresh from its ' +

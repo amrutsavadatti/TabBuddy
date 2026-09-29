@@ -1,6 +1,6 @@
 import { addSnapshot, getSnapshots, updateSnapshot } from './storage';
 import { tabToSnapshotTab, type TriageTab } from './triage';
-import type { Snapshot } from './types';
+import type { Snapshot, SnapshotTab } from './types';
 
 export const ARCHIVED_SNAPSHOT_NAME = 'Archived';
 export const ARCHIVED_ACCENT_COLOR = 'hsl(0 0% 60%)';
@@ -67,15 +67,31 @@ export async function archiveTab(tab: TriageTab): Promise<void> {
 }
 
 /** Appends the tabs to the reserved "Archived" snapshot in a single write,
- * and only then closes them, one by one, so a failed save closes nothing and
- * a tab that is already gone doesn't stop the others. Returns how many tabs
- * the browser actually closed. */
-export async function archiveTabs(
-  tabs: TriageTab[],
-): Promise<{ snapshotId: string; snapshotTabCount: number; closed: number }> {
+ * without closing anything. Returns what the snapshot held before, so a caller
+ * that fails later can put it back. */
+export async function saveToArchive(tabs: TriageTab[]): Promise<{
+  snapshotId: string;
+  snapshotTabCount: number;
+  previous: { tabs: SnapshotTab[]; updatedAt: number };
+}> {
   const archived = await getOrCreateArchivedSnapshot();
   const all = [...archived.tabs, ...tabs.map(tabToSnapshotTab)];
   await updateSnapshot(archived.id, { tabs: all, updatedAt: Date.now() });
+  return {
+    snapshotId: archived.id,
+    snapshotTabCount: all.length,
+    previous: { tabs: archived.tabs, updatedAt: archived.updatedAt },
+  };
+}
+
+/** Saves the tabs to the Archived snapshot in a single write, and only then
+ * closes them, one by one, so a failed save closes nothing and a tab that is
+ * already gone doesn't stop the others. Returns how many tabs the browser
+ * actually closed. */
+export async function archiveTabs(
+  tabs: TriageTab[],
+): Promise<{ snapshotId: string; snapshotTabCount: number; closed: number }> {
+  const saved = await saveToArchive(tabs);
   let closed = 0;
   for (const tab of tabs) {
     try {
@@ -85,5 +101,5 @@ export async function archiveTabs(
       // already closed by the user in the meantime — fine either way
     }
   }
-  return { snapshotId: archived.id, snapshotTabCount: all.length, closed };
+  return { snapshotId: saved.snapshotId, snapshotTabCount: saved.snapshotTabCount, closed };
 }

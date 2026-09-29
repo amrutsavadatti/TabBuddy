@@ -18,6 +18,17 @@ export interface ClosedTab {
 
 /** Everything undo needs to reverse one confirmed action. */
 export type UndoPayload =
+  | {
+      /** A whole triage plan: undo reopens the tabs and takes back everything the plan saved. */
+      kind: 'triage';
+      closed: ClosedTab[];
+      /** What was written to the Archived snapshot, as page addresses. */
+      archive: { archivedSnapshotId: string; urls: string[] } | null;
+      /** Pages added to existing snapshots. */
+      appended: { snapshotId: string; snapshotName: string; urls: string[] }[];
+      /** New snapshots the plan created, and their updatedAt right after, to tell if they were touched since. */
+      created: { snapshotId: string; name: string; updatedAfter: number; urls: string[] }[];
+    }
   | { kind: 'archive'; archivedSnapshotId: string; tabs: ClosedTab[] }
   | { kind: 'close'; tabs: ClosedTab[] }
   | {

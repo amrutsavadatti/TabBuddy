@@ -2,7 +2,8 @@ import type { UndoResult } from '../bridge/protocol';
 import { getActivity, markUndone, recordActivity, type UndoPayload } from './activityLog';
 import { BridgeFailure } from './bridgeFailure';
 import { reopenTabs } from './reopenTabs';
-import { getSnapshots, updateSnapshot } from './storage';
+import { deleteSnapshots, getSnapshots, updateSnapshot } from './storage';
+import type { SnapshotTab } from './types';
 
 async function undoRemoval(payload: Extract<UndoPayload, { kind: 'removeFromSnapshot' }>): Promise<UndoResult> {
   const snapshot = (await getSnapshots()).find((s) => s.id === payload.snapshotId);
@@ -62,6 +63,79 @@ async function undoArchive(payload: Extract<UndoPayload, { kind: 'archive' }>): 
   return { action: 'undo', undid: 'archive', reopen, removedFromArchived };
 }
 
+/** Undoes a whole triage plan. The closed tabs are reopened first; then only
+ * what the plan saved is taken back, and only for tabs that really came back,
+ * so a tab that failed to reopen is never lost. A new snapshot the plan created
+ * is deleted only if nobody has touched it since and all its tabs are back. */
+async function undoTriage(payload: Extract<UndoPayload, { kind: 'triage' }>): Promise<UndoResult> {
+  const { succeeded, ...reopen } = await reopenTabs(payload.closed);
+  if (payload.closed.length > 0 && succeeded.length === 0) {
+    throw new BridgeFailure(
+      'internal',
+      'None of the closed tabs could be reopened, so everything the plan saved was left as it is.',
+    );
+  }
+
+  // How many copies of each page really came back, handed out as they are claimed.
+  const back = new Map<string, number>();
+  for (const tab of succeeded) back.set(tab.url, (back.get(tab.url) ?? 0) + 1);
+  const claim = (url: string): boolean => {
+    const left = back.get(url) ?? 0;
+    if (left === 0) return false;
+    back.set(url, left - 1);
+    return true;
+  };
+  const claimAll = (urls: string[]): boolean => {
+    const needed = new Map<string, number>();
+    for (const url of urls) needed.set(url, (needed.get(url) ?? 0) + 1);
+    if ([...needed].some(([url, n]) => (back.get(url) ?? 0) < n)) return false;
+    urls.forEach(claim);
+    return true;
+  };
+  /** Takes the newest entry for each claimed page out of a snapshot. */
+  const takeBack = async (snapshotId: string, urls: string[]): Promise<number> => {
+    const snapshot = (await getSnapshots()).find((s) => s.id === snapshotId);
+    if (!snapshot) return 0;
+    const tabs: SnapshotTab[] = [...snapshot.tabs];
+    let removed = 0;
+    for (const url of urls) {
+      if (!claim(url)) continue;
+      for (let i = tabs.length - 1; i >= 0; i--) {
+        if (tabs[i]!.url === url) {
+          tabs.splice(i, 1);
+          removed += 1;
+          break;
+        }
+      }
+    }
+    if (removed > 0) await updateSnapshot(snapshotId, { tabs, updatedAt: Date.now() });
+    return removed;
+  };
+
+  const removedFromArchived = payload.archive
+    ? await takeBack(payload.archive.archivedSnapshotId, payload.archive.urls)
+    : 0;
+  let removedFromSnapshots = 0;
+  for (const appended of payload.appended) {
+    removedFromSnapshots += await takeBack(appended.snapshotId, appended.urls);
+  }
+
+  let deletedSnapshots = 0;
+  let keptSnapshots = 0;
+  const current = await getSnapshots();
+  for (const made of payload.created) {
+    const snapshot = current.find((s) => s.id === made.snapshotId);
+    if (!snapshot) continue; // already gone
+    if (snapshot.updatedAt === made.updatedAfter && claimAll(made.urls)) {
+      await deleteSnapshots([made.snapshotId]);
+      deletedSnapshots += 1;
+    } else {
+      keptSnapshots += 1;
+    }
+  }
+  return { action: 'undo', undid: 'triage', reopen, removedFromArchived, removedFromSnapshots, deletedSnapshots, keptSnapshots };
+}
+
 /** Reverses one confirmed action from the activity log, once. If it cannot be
  * reversed the entry is left as it was, so it can be tried again. */
 export async function undoActivity(undoId: unknown): Promise<UndoResult> {
@@ -88,7 +162,9 @@ export async function undoActivity(undoId: unknown): Promise<UndoResult> {
       ? await undoRemoval(payload)
       : payload.kind === 'close'
         ? await undoClose(payload)
-        : await undoArchive(payload);
+        : payload.kind === 'triage'
+          ? await undoTriage(payload)
+          : await undoArchive(payload);
 
   await markUndone(entry.id);
   try {

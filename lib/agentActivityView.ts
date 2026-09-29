@@ -42,6 +42,17 @@ export function describeUndoResult(result: UndoResult): string {
       const failed = result.reopen.failed > 0 ? `; ${result.reopen.failed} could not be reopened` : '';
       return `Reopened ${plural(back, 'tab', 'tabs')}${failed}`;
     }
+    case 'triage': {
+      const back = result.reopen.restored + result.reopen.reopened;
+      const undone: string[] = [];
+      if (result.removedFromArchived) undone.push(`${plural(result.removedFromArchived, 'tab', 'tabs')} out of the archive`);
+      if (result.removedFromSnapshots) undone.push(`${plural(result.removedFromSnapshots, 'tab', 'tabs')} out of snapshots`);
+      if (result.deletedSnapshots) undone.push(`${plural(result.deletedSnapshots, 'new snapshot', 'new snapshots')} deleted`);
+      if (result.keptSnapshots) undone.push(`${plural(result.keptSnapshots, 'new snapshot', 'new snapshots')} kept`);
+      const took = undone.length > 0 ? ` and took back what the plan saved (${undone.join(', ')})` : '';
+      const failed = result.reopen.failed > 0 ? `; ${result.reopen.failed} could not be reopened` : '';
+      return `Reopened ${plural(back, 'tab', 'tabs')}${took}${failed}`;
+    }
     case 'removeFromSnapshot': {
       const changed = result.snapshotChangedSince ? ' (it had changed, so positions may differ)' : '';
       return `Put ${plural(result.restoredTabs, 'saved tab', 'saved tabs')} back in "${result.snapshot.name}"${changed}`;

@@ -41,6 +41,7 @@ describe('tools', () => {
     'propose_archive_tabs',
     'propose_close_tabs',
     'propose_remove_from_snapshot',
+    'propose_triage_plan',
     'search_tabs',
     'summarize_window',
   ];
@@ -60,7 +61,7 @@ describe('tools', () => {
     'update_snapshot_from_window',
   ];
 
-  it('offers thirteen read-only tools and eleven that change things', async () => {
+  it('offers fourteen read-only tools and eleven that change things', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...READ_ONLY, ...WRITES].sort());
@@ -208,6 +209,7 @@ describe('tools', () => {
     'propose_archive_tabs',
     'propose_close_tabs',
     'propose_remove_from_snapshot',
+    'propose_triage_plan',
     'rename_snapshot',
     'restore_snapshot',
     'save_window',
@@ -249,6 +251,7 @@ describe('tools', () => {
       ['propose_archive_tabs', { tabIds: [1] }, 'proposeArchiveTabs'],
       ['propose_close_tabs', { tabIds: [1] }, 'proposeCloseTabs'],
       ['propose_remove_from_snapshot', { id: 's1', indexes: [0] }, 'proposeRemoveFromSnapshot'],
+      ['propose_triage_plan', { close: [1] }, 'proposeTriagePlan'],
     ];
     expect(calls.map(([name]) => name).sort()).toEqual([...TAKES_REQUEST].sort());
     for (const [name, args, method] of calls) {
@@ -284,6 +287,96 @@ describe('tools', () => {
     expect(instructions).toContain('`request` phrase');
     expect(instructions).toContain('every');
     expect(instructions).toContain('Ask before closing, archiving or removing');
+  });
+
+  it('describes the triage plan so the model sorts each tab into one bucket and asks first', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const plan = tools.find((t) => t.name === 'propose_triage_plan')!;
+    for (const phrase of [
+      'exactly ONE bucket',
+      'WITHOUT saving',
+      'Archived snapshot',
+      'EXISTING snapshot',
+      'stay open',
+      'changes NOTHING',
+      'never raw ids',
+      'clear yes',
+      'undo',
+    ]) {
+      expect(plan.description).toContain(phrase);
+    }
+    expect(plan.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+    // confirming and undoing both know about a plan
+    expect(tools.find((t) => t.name === 'confirm_proposal')!.description).toContain('propose_triage_plan it SAVES');
+    expect(tools.find((t) => t.name === 'undo')!.description).toContain('Triage plan:');
+  });
+
+  it('offers the four buckets, none of them required, so a plan can use any mix', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const schema = tools.find((t) => t.name === 'propose_triage_plan')!.inputSchema;
+    expect(Object.keys(schema.properties!).sort()).toEqual(
+      ['archive', 'close', 'fileInto', 'includeProtected', 'newSnapshots', 'request', 'windowId'].sort(),
+    );
+    expect(schema.required ?? []).toEqual([]);
+  });
+
+  it('forwards a whole plan, whatever mix of buckets it uses', async () => {
+    const send = vi.fn(async () => ({ ok: true }));
+    const client = await connect(send);
+    const plan = {
+      close: [1, 2],
+      archive: [3],
+      fileInto: [{ id: 's1', tabIds: [4, 5] }],
+      newSnapshots: [{ name: 'Research', tabIds: [6], categoryNames: ['Learning'] }],
+      windowId: 7,
+      includeProtected: true,
+      request: 'clean up my Job Hunt window',
+    };
+    await client.callTool({ name: 'propose_triage_plan', arguments: plan });
+    expect(send).toHaveBeenLastCalledWith('proposeTriagePlan', plan);
+    await client.callTool({ name: 'propose_triage_plan', arguments: { close: [1] } });
+    expect(send).toHaveBeenLastCalledWith('proposeTriagePlan', { close: [1] });
+  });
+
+  it('rejects a malformed plan without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    const attempts = [
+      { close: 'x' },
+      { close: ['1'] },
+      { close: [1.5] },
+      { close: [] },
+      { close: Array.from({ length: 301 }, (_, i) => i) },
+      { fileInto: [{ tabIds: [1] }] },
+      { fileInto: [{ id: '', tabIds: [1] }] },
+      { fileInto: [{ id: 's1' }] },
+      { newSnapshots: [{ tabIds: [1] }] },
+      { newSnapshots: [{ name: '', tabIds: [1] }] },
+      { newSnapshots: [{ name: 'x'.repeat(101), tabIds: [1] }] },
+      { newSnapshots: [{ name: 'X', tabIds: [1], categoryNames: Array(11).fill('c') }] },
+      { close: [1], windowId: 1.5 },
+      { close: [1], includeProtected: 'yes' },
+      { close: [1], request: 'x'.repeat(121) },
+    ];
+    for (const arguments_ of attempts) {
+      const result = await client.callTool({ name: 'propose_triage_plan', arguments: arguments_ }).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('shows the agent why a plan was refused', async () => {
+    const client = await connect(async () => {
+      throw new BridgeCallError({
+        code: 'invalid_params',
+        message: 'Each tab can go in only one bucket, but tab 2 is in both close and archive.',
+      });
+    });
+    const result = await client.callTool({ name: 'propose_triage_plan', arguments: { close: [2], archive: [2] } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('only one bucket');
   });
 
   it('forwards propose and confirm arguments', async () => {

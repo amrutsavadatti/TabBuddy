@@ -26,6 +26,7 @@ export type Method =
   | 'proposeArchiveTabs'
   | 'proposeCloseTabs'
   | 'proposeRemoveFromSnapshot'
+  | 'proposeTriagePlan'
   | 'confirmProposal'
   | 'undo'
   | 'getAgentActivity';
@@ -572,7 +573,8 @@ export interface ConfirmRemoveFromSnapshotResult {
 export type ConfirmProposalResult =
   | ConfirmArchiveResult
   | ConfirmCloseResult
-  | ConfirmRemoveFromSnapshotResult;
+  | ConfirmRemoveFromSnapshotResult
+  | ConfirmTriageResult;
 
 /** The activity log keeps this many entries. */
 export const MAX_ACTIVITY_ENTRIES = 100;
@@ -629,9 +631,77 @@ export type UndoResult =
   | { action: 'undo'; undid: 'close'; reopen: ReopenSummary }
   | {
       action: 'undo';
+      undid: 'triage';
+      reopen: ReopenSummary;
+      /** Entries taken back out of the Archived snapshot. */
+      removedFromArchived: number;
+      /** Tabs taken back out of existing snapshots they had been added to. */
+      removedFromSnapshots: number;
+      /** New snapshots the plan created that were deleted again (only untouched ones are). */
+      deletedSnapshots: number;
+      /** New snapshots left in place because they were edited since, or a tab in them did not reopen. */
+      keptSnapshots: number;
+    }
+  | {
+      action: 'undo';
       undid: 'removeFromSnapshot';
       restoredTabs: number;
       snapshot: { id: string; name: string; tabCount: number };
       /** True if the snapshot changed after the removal, so tabs may not be back in their exact original positions. */
       snapshotChangedSince: boolean;
     };
+
+/** Most open tabs one triage plan may cover. */
+export const MAX_TRIAGE_TABS = 300;
+
+export interface TriagePlanParams {
+  /** Tabs to close without saving them anywhere. */
+  close?: number[];
+  /** Tabs to archive: saved to the Archived snapshot, then closed. */
+  archive?: number[];
+  /** Tabs to add to an existing snapshot, then close. */
+  fileInto?: { id: string; tabIds: number[] }[];
+  /** Tabs to save as a new snapshot, then close. */
+  newSnapshots?: { name: string; tabIds: number[]; categoryNames?: string[] }[];
+  /** The window the plan is about. Only used to say how many of its tabs stay open. */
+  windowId?: number;
+  /** Also plan pinned tabs, tabs playing sound and snapshot-owned tabs. Only if the user explicitly asked for those tabs. */
+  includeProtected?: boolean;
+  request?: string;
+}
+
+export type TriageStepResult =
+  | { action: 'close'; tabs: ProposalTab[] }
+  | { action: 'archive'; tabs: ProposalTab[] }
+  | { action: 'fileInto'; snapshot: { id: string; name: string }; tabs: ProposalTab[] }
+  | { action: 'newSnapshot'; name: string; categoryNames: string[]; tabs: ProposalTab[] };
+
+export interface TriagePlanResult {
+  proposalId: string;
+  action: 'triage';
+  /** One sentence describing what confirming will do. */
+  summary: string;
+  expiresAt: number;
+  expiresInSeconds: number;
+  /** The plan, bucket by bucket: show these titles to the user. */
+  steps: TriageStepResult[];
+  /** How many tabs each kind of step covers. */
+  totals: { close: number; archive: number; fileInto: number; newSnapshot: number };
+  /** Tabs left open in the plan's window; null if no windowId was given. */
+  leftOpen: number | null;
+  /** Tabs left out of the plan, and why. */
+  skipped: { tabId: number; reason: string }[];
+}
+
+export interface ConfirmTriageResult {
+  action: 'triage';
+  undoId: string | null;
+  /** Tabs actually closed. */
+  closed: number;
+  /** Tabs saved to the Archived snapshot. */
+  archived: number;
+  /** Existing snapshots that had tabs added; alreadyThere counts pages they already held. */
+  filed: { snapshotId: string; name: string; added: number; alreadyThere: number }[];
+  /** New snapshots created. */
+  created: { snapshotId: string; name: string; tabCount: number }[];
+}

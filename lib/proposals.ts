@@ -28,11 +28,27 @@ export interface RemoveFromSnapshotProposal extends ProposalBase {
   request?: string;
 }
 
-export type Proposal = TabProposal | RemoveFromSnapshotProposal;
+/** One bucket of a triage plan. */
+export type TriageStep =
+  | { action: 'close'; tabs: ProposalTab[] }
+  | { action: 'archive'; tabs: ProposalTab[] }
+  | { action: 'fileInto'; snapshotId: string; snapshotName: string; tabs: ProposalTab[] }
+  | { action: 'newSnapshot'; name: string; categoryNames: string[]; tabs: ProposalTab[] };
+
+/** Several buckets confirmed together: everything is saved first, then the tabs are closed. */
+export interface TriageProposal extends ProposalBase {
+  kind: 'triage';
+  steps: TriageStep[];
+  includeProtected: boolean;
+  request?: string;
+}
+
+export type Proposal = TabProposal | RemoveFromSnapshotProposal | TriageProposal;
 
 export type NewProposal =
   | Omit<TabProposal, keyof ProposalBase>
-  | Omit<RemoveFromSnapshotProposal, keyof ProposalBase>;
+  | Omit<RemoveFromSnapshotProposal, keyof ProposalBase>
+  | Omit<TriageProposal, keyof ProposalBase>;
 
 const PROPOSALS_KEY = 'agentProposals';
 /** Old proposals are dropped beyond this many, oldest first. */
