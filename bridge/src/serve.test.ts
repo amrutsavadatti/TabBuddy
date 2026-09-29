@@ -41,6 +41,7 @@ describe('tools', () => {
     'summarize_window',
   ];
   const WRITES = [
+    'add_tabs_to_snapshot',
     'create_snapshot_from_urls',
     'focus_tab',
     'open_urls',
@@ -51,7 +52,7 @@ describe('tools', () => {
     'update_snapshot_from_window',
   ];
 
-  it('offers nine read-only tools and eight that change things', async () => {
+  it('offers nine read-only tools and nine that change things', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...READ_ONLY, ...WRITES].sort());
@@ -263,6 +264,44 @@ describe('tools', () => {
     const description = tools.find((t) => t.name === 'summarize_window')!.description!;
     expect(description).toContain('never page contents');
     expect(description).toContain('ask what the window');
+  });
+
+  it('add_tabs_to_snapshot forwards open tabs and links, and warns about updating an open snapshot', async () => {
+    const send = vi.fn(async () => ({ added: [] }));
+    const client = await connect(send);
+    await client.callTool({
+      name: 'add_tabs_to_snapshot',
+      arguments: { id: 's1', tabIds: [4, 5], urls: ['https://a.test/', { url: 'https://b.test/', title: 'B' }] },
+    });
+    expect(send).toHaveBeenLastCalledWith('addTabsToSnapshot', {
+      id: 's1',
+      tabIds: [4, 5],
+      urls: ['https://a.test/', { url: 'https://b.test/', title: 'B' }],
+    });
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === 'add_tabs_to_snapshot')!;
+    expect(tool.description).toContain('snapshotIsOpen');
+    expect(tool.description).toContain('does NOT close');
+    expect(tool.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+  });
+
+  it('rejects malformed add_tabs_to_snapshot arguments without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    const attempts = [
+      { name: 'add_tabs_to_snapshot', arguments: {} },
+      { name: 'add_tabs_to_snapshot', arguments: { id: '' } },
+      { name: 'add_tabs_to_snapshot', arguments: { id: 's1', tabIds: ['4'] } },
+      { name: 'add_tabs_to_snapshot', arguments: { id: 's1', tabIds: [1.5] } },
+      { name: 'add_tabs_to_snapshot', arguments: { id: 's1', tabIds: Array.from({ length: 51 }, (_, i) => i) } },
+      { name: 'add_tabs_to_snapshot', arguments: { id: 's1', urls: [{ title: 'no url' }] } },
+      { name: 'add_tabs_to_snapshot', arguments: { id: 's1', urls: Array(51).fill('https://a.test/') } },
+    ];
+    for (const attempt of attempts) {
+      const result = await client.callTool(attempt).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('rejects malformed save_window arguments without calling the browser', async () => {

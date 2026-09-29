@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import {
+  MAX_ADD_TABS,
   MAX_DUPLICATE_GROUPS,
   MAX_SUMMARY_FLAGGED,
   MAX_SUMMARY_SITES,
@@ -463,6 +464,42 @@ export function createServer(send: Send): McpServer {
       annotations: { readOnlyHint: true },
     },
     ({ windowId }) => runTool(send, 'findDuplicateTabs', windowId === undefined ? undefined : { windowId }),
+  );
+
+  server.registerTool(
+    'add_tabs_to_snapshot',
+    {
+      title: 'Add tabs or links to an existing snapshot',
+      description:
+        'Append tabs to a snapshot that already exists, without changing what is in it. Give tabIds ' +
+        '(open tabs, from list_open_windows, search_tabs or summarize_window) and/or urls (links, as ' +
+        `a URL or {url, title}); ${MAX_ADD_TABS} in total at most. Use it when the user says "add this to ` +
+        'my X snapshot" or wants to grow a reading list. Pages already in the snapshot are skipped, ' +
+        'matched the way find_duplicate_tabs matches (so a link that differs only by tracking ' +
+        'parameters counts as the same); closed or private tabs and non-web pages are skipped too. ' +
+        'Every skip is listed with its reason, so tell the user about them; adding nothing new is a ' +
+        'normal result, not an error. New tabs go at the end, and "added" gives their positions. It ' +
+        'does NOT close the open tabs. Check snapshotIsOpen in the result: if true, the snapshot is ' +
+        'open in a window, and pressing Update on it later (or update_snapshot_from_window) would ' +
+        'replace its saved tabs with that window\'s and drop what you added, so mention that to the ' +
+        'user. The reserved "Archived" snapshot cannot be added to. To make a new snapshot instead, ' +
+        'use create_snapshot_from_urls or save_window.',
+      inputSchema: {
+        id: z.string().min(1).describe('Snapshot id, from list_snapshots.'),
+        tabIds: z
+          .array(z.number().int())
+          .max(MAX_ADD_TABS)
+          .optional()
+          .describe('Open tabs to add, from list_open_windows, search_tabs or summarize_window.'),
+        urls: z
+          .array(z.union([z.string().min(1), z.object({ url: z.string().min(1), title: z.string().optional() })]))
+          .max(MAX_ADD_TABS)
+          .optional()
+          .describe('Links to add: web addresses, or {url, title} pairs.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    ({ id, tabIds, urls }) => runTool(send, 'addTabsToSnapshot', { id, tabIds, urls }),
   );
 
   server.registerTool(

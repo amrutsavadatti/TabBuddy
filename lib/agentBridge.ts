@@ -30,6 +30,7 @@ import {
 import { focusTab, openUrls, parseOpenUrlsParams, parseTabId } from './agentOpen';
 import { resolveWindow, saveWindow } from './agentSave';
 import {
+  addTabsToSnapshot,
   createSnapshotFromUrls,
   renameSnapshotTo,
   tagSnapshots,
@@ -266,6 +267,7 @@ export const handlers: HandlerTable = {
   focusTab: (params): Promise<FocusTabResult> => focusTab(parseTabId(params)),
   saveWindow: (params) => saveWindow(params),
   createSnapshotFromUrls: (params) => createSnapshotFromUrls(params),
+  addTabsToSnapshot: (params) => addTabsToSnapshot(params),
   updateSnapshotFromWindow: (params) => updateSnapshotFromWindow(params),
   renameSnapshot: (params) => renameSnapshotTo(params),
   tagSnapshots: (params) => tagSnapshots(params),

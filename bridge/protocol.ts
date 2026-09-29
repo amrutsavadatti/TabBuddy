@@ -21,7 +21,8 @@ export type Method =
   | 'renameSnapshot'
   | 'tagSnapshots'
   | 'findDuplicateTabs'
-  | 'summarizeWindow';
+  | 'summarizeWindow'
+  | 'addTabsToSnapshot';
 
 export type ErrorCode =
   | 'unknown_method'
@@ -451,4 +452,29 @@ export interface WindowSummary {
   savedElsewhere: { count: number; tabs: { tabId: number; snapshotName: string }[] };
   /** Tabs that look like they might hold work in progress (an email being written, a form, a checkout). A guess from the address and title only. */
   mayHaveUnsavedWork: { total: number; tabs: { tabId: number; title: string; reason: string }[] };
+}
+
+/** Most tabs and links `addTabsToSnapshot` adds in one call. */
+export const MAX_ADD_TABS = 50;
+
+export interface AddTabsToSnapshotParams {
+  /** The snapshot to add to. */
+  id: string;
+  /** Open tabs to add, from list_open_windows or search_tabs. */
+  tabIds?: number[];
+  /** Links to add, as URLs or {url, title}. */
+  urls?: (string | { url: string; title?: string })[];
+}
+
+export interface AddTabsToSnapshotResult {
+  snapshotId: string;
+  name: string;
+  /** What was added, with each tab's position in the snapshot. */
+  added: { index: number; url: string; title: string }[];
+  /** Entries that were not added, and why. */
+  skipped: { value: string; reason: string }[];
+  /** How many tabs the snapshot holds now. */
+  tabCount: number;
+  /** True if the snapshot is open in a window. Pressing Update on it later would replace its saved tabs with that window's, dropping what was added. */
+  snapshotIsOpen: boolean;
 }

@@ -1,9 +1,12 @@
 import {
+  MAX_ADD_TABS,
   MAX_CATEGORY_NAME_LENGTH,
   MAX_CATEGORY_NAMES,
   MAX_SNAPSHOT_URLS,
   MAX_TAG_TARGETS,
   MAX_TITLE_LENGTH,
+  type AddTabsToSnapshotParams,
+  type AddTabsToSnapshotResult,
   type CategoryUse,
   type CreateSnapshotFromUrlsParams,
   type CreateSnapshotFromUrlsResult,
@@ -15,8 +18,10 @@ import { parseSnapshotName } from './agentSave';
 import { isArchivedSnapshot, renameSnapshot } from './archive';
 import { BridgeFailure } from './bridgeFailure';
 import { addCategory, addSnapshotsToCategories, getCategories } from './categories';
+import { resolveLazyTab } from './lazyTab';
 import { getUniqueName } from './names';
-import { addSnapshot, getSnapshots } from './storage';
+import { pageKey } from './pageKey';
+import { addSnapshot, getSnapshots, updateSnapshot } from './storage';
 import type { Snapshot, SnapshotTab } from './types';
 import { updateSnapshotFromLiveWindow } from './update';
 
@@ -87,7 +92,7 @@ function siteName(url: URL): string {
  * addresses are kept; anything else, and repeats of an address, are left out
  * and reported, so nothing disappears silently. A missing title becomes the
  * site's name. */
-export function parseSnapshotUrls(value: unknown): ParsedUrls {
+export function classifyUrls(value: unknown): ParsedUrls {
   if (!Array.isArray(value) || value.length === 0) {
     throw new BridgeFailure('invalid_params', 'urls must be a non-empty list of web addresses.');
   }
@@ -120,13 +125,19 @@ export function parseSnapshotUrls(value: unknown): ParsedUrls {
     const title = typeof rawTitle === 'string' ? rawTitle.trim().slice(0, MAX_TITLE_LENGTH) : '';
     tabs.push({ url: url.href, title: title || siteName(url), pinned: false, groupIndex: null });
   }
-  if (tabs.length === 0) {
+  return { tabs, skipped };
+}
+
+/** Like classifyUrls, but fails, naming every problem, when nothing is usable. */
+export function parseSnapshotUrls(value: unknown): ParsedUrls {
+  const parsed = classifyUrls(value);
+  if (parsed.tabs.length === 0) {
     throw new BridgeFailure(
       'invalid_params',
-      `None of the urls could be saved: ${skipped.map((s) => `${s.value} (${s.reason})`).join('; ')}`,
+      `None of the urls could be saved: ${parsed.skipped.map((s) => `${s.value} (${s.reason})`).join('; ')}`,
     );
   }
-  return { tabs, skipped };
+  return parsed;
 }
 
 export async function createSnapshotFromUrls(params: unknown): Promise<CreateSnapshotFromUrlsResult> {
@@ -235,4 +246,116 @@ export async function tagSnapshots(params: unknown): Promise<TagSnapshotsResult>
   const categories = await findOrCreateCategories(names);
   const tagged = await addSnapshotsToCategories(ids, categories.map((c) => c.id));
   return { categories, tagged };
+}
+
+// ---- add to an existing snapshot ----
+
+/** Pure: checks an addTabsToSnapshot request. Open tabs and links may be
+ * given together; at least one is needed. */
+export function parseAddTabsParams(params: unknown): { id: string; tabIds: number[]; urls: unknown[] } {
+  const p = (params ?? {}) as Partial<AddTabsToSnapshotParams>;
+  const id = requireId(params);
+  const tabIds = p.tabIds ?? [];
+  if (!Array.isArray(tabIds) || tabIds.some((t) => typeof t !== 'number' || !Number.isInteger(t))) {
+    throw new BridgeFailure(
+      'invalid_params',
+      'tabIds must be a list of tab ids from list_open_windows or search_tabs.',
+    );
+  }
+  const urls = p.urls ?? [];
+  if (!Array.isArray(urls)) {
+    throw new BridgeFailure('invalid_params', 'urls must be a list of web addresses.');
+  }
+  if (tabIds.length + urls.length === 0) {
+    throw new BridgeFailure('invalid_params', 'Give tabIds and/or urls to add.');
+  }
+  if (tabIds.length + urls.length > MAX_ADD_TABS) {
+    throw new BridgeFailure('invalid_params', `Add at most ${MAX_ADD_TABS} tabs and links at a time.`);
+  }
+  return { id, tabIds: [...new Set(tabIds)], urls };
+}
+
+/** Appends open tabs and/or links to an existing snapshot. Pages already in
+ * the snapshot (by pageKey, so tracking-parameter variants count) are skipped,
+ * as are closed or private tabs and anything that is not a web page; every
+ * skip is reported. Adding nothing new is a normal outcome, not an error. It
+ * never closes a tab. */
+export async function addTabsToSnapshot(params: unknown): Promise<AddTabsToSnapshotResult> {
+  const { id, tabIds, urls } = parseAddTabsParams(params);
+  const snapshot = (await getSnapshots()).find((s) => s.id === id);
+  if (!snapshot) throw new BridgeFailure('not_found', NO_SUCH_SNAPSHOT);
+  if (isArchivedSnapshot(snapshot)) {
+    throw new BridgeFailure(
+      'invalid_params',
+      'The Archived snapshot is filled by archiving tabs, not by adding to it.',
+    );
+  }
+
+  const candidates: SnapshotTab[] = [];
+  const skipped: AddTabsToSnapshotResult['skipped'] = [];
+
+  for (const tabId of tabIds) {
+    let tab;
+    try {
+      tab = await browser.tabs.get(tabId);
+    } catch {
+      tab = undefined;
+    }
+    // A private tab is reported exactly like a closed one: the bridge never touches it.
+    if (!tab || tab.incognito) {
+      skipped.push({ value: `tab ${tabId}`, reason: 'no open tab with that id (it may have been closed)' });
+      continue;
+    }
+    const real = resolveLazyTab(tab);
+    if (pageKey(real.url ?? '') === null) {
+      skipped.push({ value: `tab ${tabId}: ${shown(real.url ?? '')}`, reason: 'not a web page' });
+      continue;
+    }
+    candidates.push({
+      url: real.url!,
+      title: (real.title || real.url!).slice(0, MAX_TITLE_LENGTH),
+      favIconUrl: real.favIconUrl,
+      pinned: tab.pinned ?? false,
+      groupIndex: null,
+    });
+  }
+
+  if (urls.length > 0) {
+    const classified = classifyUrls(urls);
+    candidates.push(...classified.tabs);
+    skipped.push(...classified.skipped);
+  }
+
+  const inSnapshot = new Set(
+    snapshot.tabs.flatMap((t) => {
+      const key = pageKey(t.url);
+      return key === null ? [] : [key];
+    }),
+  );
+  const addedKeys = new Set<string>();
+  const added: SnapshotTab[] = [];
+  for (const tab of candidates) {
+    const key = pageKey(tab.url)!;
+    if (inSnapshot.has(key)) {
+      skipped.push({ value: shown(tab.url), reason: 'already in this snapshot' });
+    } else if (addedKeys.has(key)) {
+      skipped.push({ value: shown(tab.url), reason: 'listed more than once' });
+    } else {
+      addedKeys.add(key);
+      added.push(tab);
+    }
+  }
+
+  if (added.length > 0) {
+    await updateSnapshot(id, { tabs: [...snapshot.tabs, ...added], updatedAt: Date.now() });
+  }
+  const first = snapshot.tabs.length;
+  return {
+    snapshotId: id,
+    name: snapshot.name,
+    added: added.map((t, i) => ({ index: first + i, url: t.url, title: t.title })),
+    skipped,
+    tabCount: first + added.length,
+    snapshotIsOpen: snapshot.linkedWindowId !== null,
+  };
 }
