@@ -82,16 +82,17 @@ export async function startHost({ input, output, socketPath, log }: HostOptions)
           continue;
         }
         const hostId = `h${nextId++}`;
+        // Register before writing: an answer can arrive before write() returns.
+        pending.set(hostId, { socket, originalId: request.id });
         try {
           output.write(encodeFrame({ id: hostId, method: request.method, params: request.params }));
         } catch (error) {
+          pending.delete(hostId);
           reply(socket, {
             id: request.id,
             error: { code: 'invalid_params', message: (error as Error).message },
           });
-          continue;
         }
-        pending.set(hostId, { socket, originalId: request.id });
       }
     });
     socket.on('error', () => {});

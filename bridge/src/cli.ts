@@ -14,10 +14,12 @@ import {
 } from './install.js';
 import { fileLogger } from './logger.js';
 import { bridgeDir, logPath, socketPath } from './paths.js';
+import { runServe } from './serve.js';
 
 const USAGE = `tabbuddy-bridge — connects AI agents to the TabBuddy extension
 
 Usage:
+  tabbuddy-bridge serve             MCP server over stdio (your AI client starts this)
   tabbuddy-bridge host              Native messaging host (the browser starts this)
   tabbuddy-bridge ping              Ask the extension for its version
   tabbuddy-bridge call <method> [json]
@@ -101,6 +103,10 @@ function runInstall(args: string[]): void {
   }
   out('\nNext: restart your browser, then switch on Agent bridge in TabBuddy (Settings → Automation).');
   out('Then run `tabbuddy-bridge doctor` to check everything.');
+  const env = installEnv();
+  const quote = (v: string) => `'${v.replaceAll("'", `'\\''`)}'`;
+  out('\nTo give Claude Code access, run:');
+  out(`  claude mcp add tabbuddy -- ${quote(env.nodePath)} ${quote(env.cliPath)} serve`);
 }
 
 function runUninstall(): void {
@@ -126,6 +132,8 @@ async function runDoctorCommand(): Promise<void> {
 async function main(argv: string[]): Promise<void> {
   const [command, ...rest] = argv;
   switch (command) {
+    case 'serve':
+      return runServe();
     case 'host':
       return runHost();
     case 'ping':

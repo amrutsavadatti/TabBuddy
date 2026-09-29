@@ -62,6 +62,20 @@ describe('host routing', () => {
     expect(await call).toEqual({ protocol: 1 });
   });
 
+  it('routes an answer that arrives before the request write has returned', async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    hosts.push(await startHost({ input, output, socketPath: sock, log: () => {} }));
+    const decoder = new FrameDecoder();
+    // answers synchronously, inside the host's own output.write() call
+    output.on('data', (chunk: Buffer) => {
+      for (const request of decoder.push(chunk) as any[]) {
+        input.write(encodeFrame({ id: request.id, result: 'instant' }));
+      }
+    });
+    expect(await callBridge('hello', undefined, { socketPath: sock })).toBe('instant');
+  });
+
   it('keeps two clients that use the same request id apart', async () => {
     const { toBrowser, browserSends, nextToBrowser } = await startTestHost();
     const clients = [net.createConnection(sock), net.createConnection(sock)];
