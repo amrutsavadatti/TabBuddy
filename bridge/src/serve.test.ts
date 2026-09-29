@@ -38,6 +38,8 @@ describe('tools', () => {
     'list_open_windows',
     'list_snapshots',
     'propose_archive_tabs',
+    'propose_close_tabs',
+    'propose_remove_from_snapshot',
     'search_tabs',
     'summarize_window',
   ];
@@ -56,7 +58,7 @@ describe('tools', () => {
     'update_snapshot_from_window',
   ];
 
-  it('offers ten read-only tools and ten that change things', async () => {
+  it('offers twelve read-only tools and ten that change things', async () => {
     const client = await connect(async () => null);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...READ_ONLY, ...WRITES].sort());
@@ -96,6 +98,57 @@ describe('tools', () => {
     expect(propose).toContain('clear yes');
     expect(propose).toContain('more than 10 tabs, always ask');
     expect(propose).toContain('includeProtected');
+  });
+
+  it('makes clear that closing saves nothing, and that removal is permanent', async () => {
+    const client = await connect(async () => null);
+    const { tools } = await client.listTools();
+    const description = (name: string) => tools.find((t) => t.name === name)!.description!;
+    const close = description('propose_close_tabs');
+    expect(close).toContain('WITHOUT saving');
+    expect(close).toContain('prefer propose_archive_tabs');
+    expect(close).toContain('extraTabIds');
+    expect(close).toContain('savedElsewhere');
+    expect(close).toContain('changes NOTHING');
+    expect(close).toContain('more than 10 tabs, always ask');
+    const remove = description('propose_remove_from_snapshot');
+    expect(remove).toContain('permanent');
+    expect(remove).toContain('changes NOTHING');
+    expect(remove).toContain('tabs_changed');
+    // one confirmation tool covers all three kinds
+    const confirm = description('confirm_proposal');
+    for (const phrase of ['ARCHIVES AND CLOSES', 'CLOSES them WITHOUT saving', 'REMOVES saved tabs']) {
+      expect(confirm).toContain(phrase);
+    }
+  });
+
+  it('forwards the close and remove proposals\' arguments', async () => {
+    const send = vi.fn(async () => ({ ok: true }));
+    const client = await connect(send);
+    await client.callTool({ name: 'propose_close_tabs', arguments: { tabIds: [3, 4], includeProtected: true } });
+    expect(send).toHaveBeenLastCalledWith('proposeCloseTabs', { tabIds: [3, 4], includeProtected: true });
+    await client.callTool({ name: 'propose_remove_from_snapshot', arguments: { id: 's1', indexes: [0, 2] } });
+    expect(send).toHaveBeenLastCalledWith('proposeRemoveFromSnapshot', { id: 's1', indexes: [0, 2] });
+  });
+
+  it('rejects malformed close and remove proposals without calling the browser', async () => {
+    const send = vi.fn(async () => null);
+    const client = await connect(send);
+    const attempts = [
+      { name: 'propose_close_tabs', arguments: {} },
+      { name: 'propose_close_tabs', arguments: { tabIds: [] } },
+      { name: 'propose_close_tabs', arguments: { tabIds: ['1'] } },
+      { name: 'propose_close_tabs', arguments: { tabIds: Array.from({ length: 101 }, (_, i) => i) } },
+      { name: 'propose_remove_from_snapshot', arguments: { id: 's1' } },
+      { name: 'propose_remove_from_snapshot', arguments: { id: '', indexes: [0] } },
+      { name: 'propose_remove_from_snapshot', arguments: { id: 's1', indexes: [] } },
+      { name: 'propose_remove_from_snapshot', arguments: { id: 's1', indexes: [1.5] } },
+    ];
+    for (const attempt of attempts) {
+      const result = await client.callTool(attempt).catch((e) => e);
+      expect(result instanceof Error || result.isError === true).toBe(true);
+    }
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('forwards propose and confirm arguments', async () => {

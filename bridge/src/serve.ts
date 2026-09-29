@@ -537,19 +537,85 @@ export function createServer(send: Send): McpServer {
   );
 
   server.registerTool(
+    'propose_close_tabs',
+    {
+      title: 'Propose closing tabs (step 1 of 2)',
+      description:
+        'Step 1 of 2 for closing tabs WITHOUT saving them: works out what closing these open tabs would do ' +
+        'and changes NOTHING. Closed tabs are not saved anywhere, so when the user might want a page again ' +
+        'prefer propose_archive_tabs. Closing is the right choice for tabs that lose nothing: the extras ' +
+        'from find_duplicate_tabs (extraTabIds), blank "new tab" pages, and pages summarize_window lists ' +
+        'under savedElsewhere (already saved in a snapshot). Get tab ids from list_open_windows, ' +
+        'search_tabs, summarize_window or find_duplicate_tabs. It returns a proposalId, a summary, the ' +
+        'exact tabs that would be closed, and "skipped": tabs left out and why. Pinned tabs, tabs playing ' +
+        'sound and tabs in a snapshot\'s open window are left alone unless includeProtected is true (only ' +
+        'when the user explicitly asked for those very tabs), and TabBuddy\'s own pages are never ' +
+        'closed. Show the user the list by title (never raw ids) and get a clear yes before calling ' +
+        'confirm_proposal, unless they already told you to close these specific tabs; for more than 10 ' +
+        `tabs, always ask. A proposal lasts 5 minutes and works once. Up to ${MAX_PROPOSAL_TABS} tabs.`,
+      inputSchema: {
+        tabIds: z
+          .array(z.number().int())
+          .min(1)
+          .max(MAX_PROPOSAL_TABS)
+          .describe('Open tabs to close, from list_open_windows, search_tabs, summarize_window or find_duplicate_tabs.'),
+        includeProtected: z
+          .boolean()
+          .optional()
+          .describe('Also propose pinned tabs, tabs playing sound and snapshot-owned tabs. Only if the user explicitly asked for those tabs.'),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    ({ tabIds, includeProtected }) => runTool(send, 'proposeCloseTabs', { tabIds, includeProtected }),
+  );
+
+  server.registerTool(
+    'propose_remove_from_snapshot',
+    {
+      title: 'Propose removing saved tabs from a snapshot (step 1 of 2)',
+      description:
+        'Step 1 of 2 for removing tabs from a SAVED snapshot: works out what would be removed and changes ' +
+        'NOTHING. Tabs are addressed by position (index) as get_snapshot and search_tabs report them. ' +
+        'Removal is permanent: the saved tabs are not archived anywhere, and it does not touch tabs open in ' +
+        'the browser. It also works on the reserved "Archived" snapshot, which is how the archive is ' +
+        'cleared. It returns a proposalId, a summary, the exact saved tabs that would go (by title), what ' +
+        'the snapshot would hold afterwards, and "skipped": positions that do not exist. snapshotIsOpen ' +
+        'tells you the snapshot is open in a window. Show the user the list by title and get a clear yes ' +
+        'before calling confirm_proposal; always ask when removing more than a few tabs, or when the ' +
+        'snapshot would end up empty. Positions shift whenever a snapshot changes, so if anything ' +
+        'changed it since, confirming fails with tabs_changed: call get_snapshot and propose again. A ' +
+        `proposal lasts 5 minutes and works once. Up to ${MAX_PROPOSAL_TABS} tabs.`,
+      inputSchema: {
+        id: z.string().min(1).describe('Snapshot id, from list_snapshots.'),
+        indexes: z
+          .array(z.number().int())
+          .min(1)
+          .max(MAX_PROPOSAL_TABS)
+          .describe('Positions of the saved tabs to remove, from get_snapshot or search_tabs.'),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    ({ id, indexes }) => runTool(send, 'proposeRemoveFromSnapshot', { id, indexes }),
+  );
+
+  server.registerTool(
     'confirm_proposal',
     {
       title: 'Carry out a proposal (step 2 of 2)',
       description:
         'Step 2 of 2: carries out a proposal from a propose_ tool. For propose_archive_tabs this ARCHIVES ' +
-        'AND CLOSES the tabs. Only call it after the user has agreed to the exact list you showed them ' +
-        '(see propose_archive_tabs for when asking can be skipped). A proposal works once and for five ' +
-        'minutes only. Before acting, every tab is checked again: if any has been closed, now shows a ' +
-        'different page, or has become pinned or started playing sound, NOTHING is changed and you get ' +
-        'tabs_changed. Tell the user and propose again with fresh tab ids. proposal_expired means the ' +
-        'proposal timed out or was already used. On success it says how many tabs were archived and ' +
-        'closed. The tabs are then in the reserved Archived snapshot (find them with search_tabs, scope ' +
-        'archived), and the user can reopen them from it in the TabBuddy dashboard. There is no undo tool yet.',
+        'AND CLOSES the tabs; for propose_close_tabs it CLOSES them WITHOUT saving them; for ' +
+        'propose_remove_from_snapshot it REMOVES saved tabs from a snapshot for good. Only call it after ' +
+        'the user has agreed to the exact list you showed them (see propose_archive_tabs for when asking ' +
+        'can be skipped). A proposal works once and for five minutes only. Before acting, everything is ' +
+        'checked again: if an open tab has been closed, now shows a different page, or has become pinned ' +
+        'or started playing sound, or if the snapshot has changed since (its tab positions may have ' +
+        'moved), NOTHING is changed and you get tabs_changed. Tell the user and propose again with fresh ' +
+        'ids. proposal_expired means the proposal timed out or was already used. On success it says how ' +
+        'many tabs were archived, closed or removed. Archived tabs are then in the reserved Archived ' +
+        'snapshot (find them with search_tabs, scope archived), and the user can reopen them from it in ' +
+        'the TabBuddy dashboard. Closed tabs are not saved anywhere, and removed saved tabs are gone. ' +
+        'There is no undo tool yet.',
       inputSchema: {
         proposalId: z.string().min(1).describe('The proposalId returned by a propose_ tool.'),
       },

@@ -651,7 +651,7 @@ asks for large batches.
 
 **Commit:** `feat(bridge): archive tabs through a confirmed proposal`
 
-### 🔲 Slice X2 — Close and remove-from-snapshot
+### ✅ Slice X2 — Close and remove-from-snapshot
 **Build:**
 - `propose_close_tabs`.
 - `propose_remove_from_snapshot`, which addresses tabs by index and checks

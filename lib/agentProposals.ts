@@ -5,14 +5,16 @@ import {
   type ProposalResult,
   type ProposalTab,
   type ProposeArchiveTabsParams,
+  type ProposeRemoveFromSnapshotParams,
+  type SnapshotEditProposalResult,
 } from '../bridge/protocol';
 import { archiveTabs } from './archive';
 import { BridgeFailure } from './bridgeFailure';
 import { resolveLazyTab } from './lazyTab';
 import { getManagedTabIds } from './managedTabs';
 import { pageKey } from './pageKey';
-import { createProposal, takeProposal } from './proposals';
-import { getSnapshots } from './storage';
+import { createProposal, takeProposal, type RemoveFromSnapshotProposal, type TabProposal } from './proposals';
+import { getSnapshots, updateSnapshot } from './storage';
 import type { TriageTab } from './triage';
 
 const NOT_OPEN = 'no open tab with that id (it may have been closed)';
@@ -21,8 +23,10 @@ function truncateTitle(title: string): string {
   return title.length > MAX_TITLE_LENGTH ? `${title.slice(0, MAX_TITLE_LENGTH - 1)}…` : title;
 }
 
-/** Pure: checks a proposeArchiveTabs request. */
-export function parseProposeArchiveParams(params: unknown): { tabIds: number[]; includeProtected: boolean } {
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** Pure: checks a request to archive or close open tabs. */
+export function parseProposeTabsParams(params: unknown): { tabIds: number[]; includeProtected: boolean } {
   const p = (params ?? {}) as Partial<ProposeArchiveTabsParams>;
   if (
     !Array.isArray(p.tabIds) ||
@@ -43,6 +47,7 @@ export function parseProposeArchiveParams(params: unknown): { tabIds: number[]; 
   }
   return { tabIds, includeProtected: p.includeProtected === true };
 }
+export const parseProposeArchiveParams = parseProposeTabsParams;
 
 /** Pure: why a tab is left alone unless the user explicitly asked for it. The
  * nudges leave these tabs alone too: the user pinned them, is using them, or a
@@ -61,12 +66,15 @@ export function protectionReason(
   return null;
 }
 
-/** Step one of two: works out what archiving these tabs would do, remembers it
- * for five minutes, and changes nothing. Tabs that cannot or should not be
- * archived are left out and listed with a reason. */
-export async function proposeArchiveTabs(params: unknown): Promise<ProposalResult> {
-  const { tabIds, includeProtected } = parseProposeArchiveParams(params);
+/** Step one of two for open tabs: works out what archiving (or closing) them
+ * would do, remembers it for five minutes, and changes nothing. Tabs that
+ * cannot or should not be touched are left out and listed with a reason.
+ * Archiving needs a real web page; closing may also take blank and other
+ * browser pages, but never TabBuddy's own. */
+async function proposeTabs(action: 'archive' | 'close', params: unknown): Promise<ProposalResult> {
+  const { tabIds, includeProtected } = parseProposeTabsParams(params);
   const [managedIds, snapshots] = await Promise.all([getManagedTabIds(), getSnapshots()]);
+  const ownPages = browser.runtime.getURL('/' as never);
 
   const tabs: ProposalTab[] = [];
   const skipped: ProposalResult['skipped'] = [];
@@ -83,8 +91,13 @@ export async function proposeArchiveTabs(params: unknown): Promise<ProposalResul
       continue;
     }
     const real = resolveLazyTab(tab);
-    if (pageKey(real.url ?? '') === null) {
+    const url = real.url ?? '';
+    if (action === 'archive' && pageKey(url) === null) {
       skipped.push({ tabId, reason: 'not a web page, so there is nothing worth archiving' });
+      continue;
+    }
+    if (url.startsWith(ownPages)) {
+      skipped.push({ tabId, reason: "one of TabBuddy's own pages" });
       continue;
     }
     if (!includeProtected) {
@@ -97,26 +110,26 @@ export async function proposeArchiveTabs(params: unknown): Promise<ProposalResul
         continue;
       }
     }
-    tabs.push({
-      tabId,
-      windowId: tab.windowId,
-      title: truncateTitle(real.title || real.url!),
-      url: real.url!,
-    });
+    tabs.push({ tabId, windowId: tab.windowId, title: truncateTitle(real.title || url || 'Untitled tab'), url });
   }
 
+  const verb = action === 'archive' ? 'archived' : 'closed';
   if (tabs.length === 0) {
     throw new BridgeFailure(
       'invalid_params',
-      `None of those tabs can be archived: ${skipped.map((s) => `tab ${s.tabId} (${s.reason})`).join('; ')}`,
+      `None of those tabs can be ${verb}: ${skipped.map((s) => `tab ${s.tabId} (${s.reason})`).join('; ')}`,
     );
   }
 
-  const proposal = await createProposal({ kind: 'archive', tabs, includeProtected });
+  const proposal = await createProposal({ kind: action, tabs, includeProtected });
+  const many = tabs.length !== 1;
   return {
     proposalId: proposal.id,
-    action: 'archive',
-    summary: `Archive ${tabs.length} tab${tabs.length === 1 ? '' : 's'} into the Archived snapshot and close ${tabs.length === 1 ? 'it' : 'them'}.`,
+    action,
+    summary:
+      action === 'archive'
+        ? `Archive ${plural(tabs.length, 'tab', 'tabs')} into the Archived snapshot and close ${many ? 'them' : 'it'}.`
+        : `Close ${plural(tabs.length, 'tab', 'tabs')} WITHOUT saving ${many ? 'them' : 'it'} anywhere.`,
     expiresAt: proposal.expiresAt,
     expiresInSeconds: Math.round((proposal.expiresAt - proposal.createdAt) / 1000),
     tabs,
@@ -124,19 +137,93 @@ export async function proposeArchiveTabs(params: unknown): Promise<ProposalResul
   };
 }
 
-/** Step two of two. The proposal is used up first, so it can never run twice.
- * Every tab is then checked against what was proposed; if any is gone, points
- * at a different page, or has become one that must be left alone, nothing at
- * all is changed and the caller must propose again. Otherwise the tabs are
- * saved to the Archived snapshot, and only then closed. */
-export async function confirmProposal(params: unknown): Promise<ConfirmProposalResult> {
-  const { proposalId } = (params ?? {}) as { proposalId?: unknown };
-  if (typeof proposalId !== 'string' || proposalId === '') {
-    throw new BridgeFailure('invalid_params', 'proposalId must be the id returned by a propose_ tool.');
-  }
-  const proposal = await takeProposal(proposalId);
-  const managedIds = await getManagedTabIds();
+export const proposeArchiveTabs = (params: unknown) => proposeTabs('archive', params);
+export const proposeCloseTabs = (params: unknown) => proposeTabs('close', params);
 
+// ---- removing saved tabs from a snapshot ----
+
+/** Pure: checks a request to remove saved tabs from a snapshot. */
+export function parseProposeRemoveParams(params: unknown): { id: string; indexes: number[] } {
+  const p = (params ?? {}) as Partial<ProposeRemoveFromSnapshotParams>;
+  if (typeof p.id !== 'string' || p.id === '') {
+    throw new BridgeFailure('invalid_params', 'id must be a snapshot id from list_snapshots.');
+  }
+  if (
+    !Array.isArray(p.indexes) ||
+    p.indexes.length === 0 ||
+    p.indexes.some((i) => typeof i !== 'number' || !Number.isInteger(i))
+  ) {
+    throw new BridgeFailure(
+      'invalid_params',
+      'indexes must be a non-empty list of tab positions, as get_snapshot and search_tabs report them.',
+    );
+  }
+  const indexes = [...new Set(p.indexes)];
+  if (indexes.length > MAX_PROPOSAL_TABS) {
+    throw new BridgeFailure('invalid_params', `Propose at most ${MAX_PROPOSAL_TABS} tabs at a time.`);
+  }
+  return { id: p.id, indexes };
+}
+
+/** Step one of two for saved tabs: which tabs would leave the snapshot, and
+ * what it would hold afterwards. Positions shift whenever the snapshot changes,
+ * so the proposal remembers when the snapshot was last updated. Nothing is
+ * changed. It works on the Archived snapshot too (that is how you clear the
+ * archive), and it never touches tabs open in the browser. */
+export async function proposeRemoveFromSnapshot(params: unknown): Promise<SnapshotEditProposalResult> {
+  const { id, indexes } = parseProposeRemoveParams(params);
+  const snapshot = (await getSnapshots()).find((s) => s.id === id);
+  if (!snapshot) {
+    throw new BridgeFailure('not_found', 'No snapshot with that id. Call list_snapshots for current ids.');
+  }
+
+  const entries: RemoveFromSnapshotProposal['entries'] = [];
+  const skipped: SnapshotEditProposalResult['skipped'] = [];
+  for (const index of [...indexes].sort((a, b) => a - b)) {
+    const tab = snapshot.tabs[index];
+    if (!tab) {
+      skipped.push({ index, reason: `no tab at that position (it holds ${plural(snapshot.tabs.length, 'tab', 'tabs')})` });
+    } else {
+      entries.push({ index, title: truncateTitle(tab.title || tab.url), url: tab.url });
+    }
+  }
+  if (entries.length === 0) {
+    throw new BridgeFailure(
+      'invalid_params',
+      `Nothing to remove from "${snapshot.name}": ${skipped.map((s) => `#${s.index} (${s.reason})`).join('; ')}`,
+    );
+  }
+
+  const proposal = await createProposal({
+    kind: 'removeFromSnapshot',
+    snapshotId: snapshot.id,
+    snapshotName: snapshot.name,
+    snapshotUpdatedAt: snapshot.updatedAt,
+    entries,
+  });
+  const left = snapshot.tabs.length - entries.length;
+  return {
+    proposalId: proposal.id,
+    action: 'removeFromSnapshot',
+    summary:
+      `Remove ${plural(entries.length, 'saved tab', 'saved tabs')} from "${snapshot.name}" for good ` +
+      `(it will hold ${plural(left, 'tab', 'tabs')}${left === 0 ? ', so it will be empty' : ''}).`,
+    expiresAt: proposal.expiresAt,
+    expiresInSeconds: Math.round((proposal.expiresAt - proposal.createdAt) / 1000),
+    snapshot: { id: snapshot.id, name: snapshot.name, tabCount: snapshot.tabs.length },
+    tabs: entries,
+    skipped,
+    snapshotIsOpen: snapshot.linkedWindowId !== null,
+  };
+}
+
+// ---- confirming ----
+
+/** Checks every proposed tab against what is open now, and returns the live
+ * tabs. If any is gone, shows a different page, or has become one that must be
+ * left alone, throws tabs_changed, and nothing has been touched. */
+async function recheckTabs(proposal: TabProposal): Promise<TriageTab[]> {
+  const managedIds = await getManagedTabIds();
   const problems: string[] = [];
   const live: TriageTab[] = [];
   for (const proposed of proposal.tabs) {
@@ -152,20 +239,20 @@ export async function confirmProposal(params: unknown): Promise<ConfirmProposalR
       continue;
     }
     const real = resolveLazyTab(tab);
-    if (real.url !== proposed.url) {
+    if ((real.url ?? '') !== proposed.url) {
       problems.push(`${label} now shows a different page`);
       continue;
     }
     if (!proposal.includeProtected) {
       const reason = protectionReason(tab, managedIds.has(tab.id) ? '' : null);
       if (reason !== null) {
-        problems.push(`${label} is now ${reason === 'pinned' ? 'pinned' : reason}`);
+        problems.push(`${label} is now ${reason}`);
         continue;
       }
     }
     live.push({
       id: tab.id,
-      url: real.url!,
+      url: real.url ?? '',
       title: real.title || proposed.title,
       favIconUrl: real.favIconUrl,
       pinned: tab.pinned ?? false,
@@ -175,17 +262,71 @@ export async function confirmProposal(params: unknown): Promise<ConfirmProposalR
   if (problems.length > 0) {
     const shown = problems.slice(0, 5).join('; ');
     const more = problems.length > 5 ? ` (and ${problems.length - 5} more)` : '';
+    const done = proposal.kind === 'archive' ? 'archived or closed' : 'closed';
     throw new BridgeFailure(
       'tabs_changed',
-      `Nothing was archived or closed: ${problems.length} of the ${proposal.tabs.length} tabs changed since the proposal. ${shown}${more}. Propose again with fresh tab ids.`,
+      `Nothing was ${done}: ${problems.length} of the ${proposal.tabs.length} tabs changed since the proposal. ${shown}${more}. Propose again with fresh tab ids.`,
     );
   }
+  return live;
+}
 
-  const done = await archiveTabs(live);
+async function confirmRemoveFromSnapshot(proposal: RemoveFromSnapshotProposal): Promise<ConfirmProposalResult> {
+  const snapshot = (await getSnapshots()).find((s) => s.id === proposal.snapshotId);
+  if (!snapshot) {
+    throw new BridgeFailure(
+      'tabs_changed',
+      `Nothing was removed: "${proposal.snapshotName}" no longer exists. Call list_snapshots and propose again.`,
+    );
+  }
+  if (snapshot.updatedAt !== proposal.snapshotUpdatedAt) {
+    throw new BridgeFailure(
+      'tabs_changed',
+      `Nothing was removed: "${snapshot.name}" was changed since the proposal, so the tab positions may have moved. Call get_snapshot and propose again.`,
+    );
+  }
+  const drop = new Set(proposal.entries.map((e) => e.index));
+  const remaining = snapshot.tabs.filter((_, index) => !drop.has(index));
+  await updateSnapshot(snapshot.id, { tabs: remaining, updatedAt: Date.now() });
   return {
-    action: 'archive',
-    archived: live.length,
-    closed: done.closed,
-    archivedSnapshot: { id: done.snapshotId, tabCount: done.snapshotTabCount },
+    action: 'removeFromSnapshot',
+    removed: snapshot.tabs.length - remaining.length,
+    snapshot: { id: snapshot.id, name: snapshot.name, tabCount: remaining.length },
   };
+}
+
+/** Step two of two, for every kind of proposal. The proposal is used up first,
+ * so it can never run twice. Everything is then checked against what was
+ * proposed; if anything has changed, nothing at all is done and the caller must
+ * propose again. Archived tabs are saved before they are closed. */
+export async function confirmProposal(params: unknown): Promise<ConfirmProposalResult> {
+  const { proposalId } = (params ?? {}) as { proposalId?: unknown };
+  if (typeof proposalId !== 'string' || proposalId === '') {
+    throw new BridgeFailure('invalid_params', 'proposalId must be the id returned by a propose_ tool.');
+  }
+  const proposal = await takeProposal(proposalId);
+
+  if (proposal.kind === 'removeFromSnapshot') return confirmRemoveFromSnapshot(proposal);
+
+  const live = await recheckTabs(proposal);
+  if (proposal.kind === 'archive') {
+    const done = await archiveTabs(live);
+    return {
+      action: 'archive',
+      archived: live.length,
+      closed: done.closed,
+      archivedSnapshot: { id: done.snapshotId, tabCount: done.snapshotTabCount },
+    };
+  }
+
+  let closed = 0;
+  for (const tab of live) {
+    try {
+      await browser.tabs.remove(tab.id);
+      closed += 1;
+    } catch {
+      // already closed by the user in the meantime: fine either way
+    }
+  }
+  return { action: 'close', closed };
 }

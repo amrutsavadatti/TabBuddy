@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PROPOSAL_TTL_MS, type ProposalTab } from '../bridge/protocol';
-import { createProposal, takeProposal } from './proposals';
+import { createProposal, takeProposal, type TabProposal } from './proposals';
 
 const tab = (id: number): ProposalTab => ({ tabId: id, windowId: 1, title: `Tab ${id}`, url: `https://s${id}.test/` });
 const input = (ids: number[] = [1]) => ({ kind: 'archive' as const, tabs: ids.map(tab), includeProtected: false });
@@ -26,15 +26,15 @@ describe('createProposal', () => {
     for (let i = 0; i < 25; i++) made.push(await createProposal(input([i]), i));
     await expect(takeProposal(made[0]!.id, 30)).rejects.toMatchObject({ code: 'proposal_expired' });
     await expect(takeProposal(made[4]!.id, 30)).rejects.toMatchObject({ code: 'proposal_expired' });
-    expect((await takeProposal(made[5]!.id, 30)).tabs[0]!.tabId).toBe(5);
-    expect((await takeProposal(made[24]!.id, 30)).tabs[0]!.tabId).toBe(24);
+    expect(((await takeProposal(made[5]!.id, 30)) as TabProposal).tabs[0]!.tabId).toBe(5);
+    expect(((await takeProposal(made[24]!.id, 30)) as TabProposal).tabs[0]!.tabId).toBe(24);
   });
 });
 
 describe('takeProposal', () => {
   it('returns the proposal exactly as made', async () => {
     const made = await createProposal({ ...input([7, 8]), includeProtected: true }, 500);
-    const taken = await takeProposal(made.id, 600);
+    const taken = (await takeProposal(made.id, 600)) as TabProposal;
     expect(taken).toEqual(made);
     expect(taken.tabs.map((t) => t.tabId)).toEqual([7, 8]);
     expect(taken.includeProtected).toBe(true);

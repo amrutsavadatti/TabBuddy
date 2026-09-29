@@ -24,6 +24,8 @@ export type Method =
   | 'summarizeWindow'
   | 'addTabsToSnapshot'
   | 'proposeArchiveTabs'
+  | 'proposeCloseTabs'
+  | 'proposeRemoveFromSnapshot'
   | 'confirmProposal';
 
 export type ErrorCode =
@@ -503,7 +505,7 @@ export interface ProposalTab {
 
 export interface ProposalResult {
   proposalId: string;
-  action: 'archive';
+  action: 'archive' | 'close';
   /** One sentence describing what confirming will do. */
   summary: string;
   /** When the proposal stops being confirmable (ms since epoch). */
@@ -528,4 +530,40 @@ export interface ConfirmArchiveResult {
   archivedSnapshot: { id: string; tabCount: number };
 }
 
-export type ConfirmProposalResult = ConfirmArchiveResult;
+export interface ConfirmCloseResult {
+  action: 'close';
+  /** Tabs actually closed (a tab the user already closed doesn't count). */
+  closed: number;
+}
+
+export interface ProposeRemoveFromSnapshotParams {
+  /** The snapshot to remove saved tabs from. */
+  id: string;
+  /** Positions of the tabs to remove, as get_snapshot and search_tabs report them. */
+  indexes: number[];
+}
+
+export interface SnapshotEditProposalResult {
+  proposalId: string;
+  action: 'removeFromSnapshot';
+  summary: string;
+  expiresAt: number;
+  expiresInSeconds: number;
+  snapshot: { id: string; name: string; tabCount: number };
+  /** The saved tabs that would be removed: show these to the user. */
+  tabs: { index: number; title: string; url: string }[];
+  skipped: { index: number; reason: string }[];
+  /** True if the snapshot is open in a window; the window's tabs are not touched. */
+  snapshotIsOpen: boolean;
+}
+
+export interface ConfirmRemoveFromSnapshotResult {
+  action: 'removeFromSnapshot';
+  removed: number;
+  snapshot: { id: string; name: string; tabCount: number };
+}
+
+export type ConfirmProposalResult =
+  | ConfirmArchiveResult
+  | ConfirmCloseResult
+  | ConfirmRemoveFromSnapshotResult;

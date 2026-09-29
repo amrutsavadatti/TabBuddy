@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { MAX_PROPOSAL_TABS, PROPOSAL_TTL_MS } from '../bridge/protocol';
+import { MAX_PROPOSAL_TABS, PROPOSAL_TTL_MS, type ConfirmArchiveResult } from '../bridge/protocol';
 import { dispatch } from './agentBridge';
 import {
   confirmProposal,
@@ -199,7 +199,7 @@ describe('confirmProposal', () => {
     const proposalId = await proposed({ 1: web(1), 2: web(2) }, [1, 2]);
     const remove = closeAll();
 
-    const result = await confirmProposal({ proposalId });
+    const result = (await confirmProposal({ proposalId })) as ConfirmArchiveResult;
 
     expect(result).toEqual({
       action: 'archive',
@@ -234,7 +234,7 @@ describe('confirmProposal', () => {
     const proposalId = await proposed({ 1: web(1) }, [1]);
     closeAll();
 
-    const result = await confirmProposal({ proposalId });
+    const result = (await confirmProposal({ proposalId })) as ConfirmArchiveResult;
 
     expect(result.archivedSnapshot).toEqual({ id: existing.id, tabCount: 2 });
     expect((await archivedSnapshot())!.tabs.map((t) => t.url)).toEqual([
@@ -333,7 +333,7 @@ describe('confirmProposal', () => {
       if (id === 1) throw new Error('No tab with id: 1');
     }) as never);
 
-    const result = await confirmProposal({ proposalId });
+    const result = (await confirmProposal({ proposalId })) as ConfirmArchiveResult;
 
     expect(result).toMatchObject({ archived: 2, closed: 1 });
     expect((await archivedSnapshot())!.tabs).toHaveLength(2);

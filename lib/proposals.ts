@@ -1,15 +1,35 @@
 import { PROPOSAL_TTL_MS, type ProposalTab } from '../bridge/protocol';
 import { BridgeFailure } from './bridgeFailure';
 
-export interface Proposal {
+interface ProposalBase {
   id: string;
-  kind: 'archive';
   createdAt: number;
   expiresAt: number;
+}
+
+/** Archive or close a set of open tabs. */
+export interface TabProposal extends ProposalBase {
+  kind: 'archive' | 'close';
   tabs: ProposalTab[];
   /** The proposal deliberately included pinned, playing or snapshot-owned tabs. */
   includeProtected: boolean;
 }
+
+/** Remove saved tabs from a snapshot, by position. */
+export interface RemoveFromSnapshotProposal extends ProposalBase {
+  kind: 'removeFromSnapshot';
+  snapshotId: string;
+  snapshotName: string;
+  /** The snapshot's updatedAt when proposed: if it differs at confirm time, positions can't be trusted. */
+  snapshotUpdatedAt: number;
+  entries: { index: number; title: string; url: string }[];
+}
+
+export type Proposal = TabProposal | RemoveFromSnapshotProposal;
+
+export type NewProposal =
+  | Omit<TabProposal, keyof ProposalBase>
+  | Omit<RemoveFromSnapshotProposal, keyof ProposalBase>;
 
 const PROPOSALS_KEY = 'agentProposals';
 /** Old proposals are dropped beyond this many, oldest first. */
@@ -34,16 +54,13 @@ function withoutExpired(map: ProposalMap, now: number): ProposalMap {
 }
 
 /** Stores a new proposal that can be confirmed once, for five minutes. */
-export async function createProposal(
-  input: Pick<Proposal, 'kind' | 'tabs' | 'includeProtected'>,
-  now: number = Date.now(),
-): Promise<Proposal> {
-  const proposal: Proposal = {
+export async function createProposal(input: NewProposal, now: number = Date.now()): Promise<Proposal> {
+  const proposal = {
     ...input,
     id: crypto.randomUUID(),
     createdAt: now,
     expiresAt: now + PROPOSAL_TTL_MS,
-  };
+  } as Proposal;
   const live = Object.values(withoutExpired(await read(), now)).sort((a, b) => a.createdAt - b.createdAt);
   const kept = live.slice(Math.max(0, live.length - (MAX_STORED - 1)));
   await write(Object.fromEntries([...kept, proposal].map((p) => [p.id, p])));
