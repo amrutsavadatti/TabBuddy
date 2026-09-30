@@ -17,6 +17,7 @@ import {
   MousePointerClick,
   Pencil,
   Plus,
+  SkipForward,
   Sparkles,
   Trash2,
   Undo2,
@@ -29,6 +30,7 @@ import {
 } from '@/lib/storage';
 import { generateSnapshotName, getUniqueName } from '@/lib/names';
 import { tabToSnapshotTab, type TriageTab } from '@/lib/triage';
+import { countSkipped, isTypingTarget, shouldCloseWindowAtEnd } from '@/lib/triageSkip';
 import { getAccentColor } from '@/lib/color';
 import { resolveLazyTab } from '@/lib/lazyTab';
 import { ARCHIVED_ACCENT_COLOR, isArchivedSnapshot, renameSnapshot } from '@/lib/archive';
@@ -37,6 +39,7 @@ import type { Snapshot } from '@/lib/types';
 
 type HistoryEntry =
   | { type: 'delete' }
+  | { type: 'skip' }
   | { type: 'file'; snapshotId: string; wasNewlyCreatedSnapshot: boolean };
 
 async function appendTabToSnapshot(id: string, tab: ReturnType<typeof tabToSnapshotTab>) {
@@ -206,14 +209,25 @@ export function TriageView({
 
   const currentTab = tabs?.[currentIndex] ?? null;
 
-  const finishIfDone = async (nextIndex: number) => {
+  /** Moves on to the next tab, or ends the session after the last one. The
+   * window is only closed if every tab in it was closed or filed: a skipped tab
+   * is still open in it and must stay. */
+  const finishIfDone = async (nextIndex: number, skippedCount = countSkipped(history)) => {
     if (!tabs) return;
     if (nextIndex >= tabs.length) {
-      await browser.windows.remove(windowId);
+      if (shouldCloseWindowAtEnd(skippedCount)) await browser.windows.remove(windowId);
       onExit();
       return;
     }
     setCurrentIndex(nextIndex);
+  };
+
+  /** Leaves the tab exactly as it is (still open, in no snapshot) and moves on. */
+  const handleSkip = async () => {
+    if (!currentTab) return;
+    setError(null);
+    setHistory((h) => [...h, { type: 'skip' }]);
+    await finishIfDone(currentIndex + 1, countSkipped(history) + 1);
   };
 
   const handleDelete = async () => {
@@ -306,7 +320,9 @@ export function TriageView({
     if (!last) return;
     setError(null);
     try {
-      if (last.type === 'delete') {
+      if (last.type === 'skip') {
+        // nothing was changed, so there is nothing to bring back
+      } else if (last.type === 'delete') {
         await browser.sessions.restore();
         await refocusSelf();
       } else {
@@ -333,11 +349,17 @@ export function TriageView({
       if (isUndoCombo) {
         e.preventDefault();
         handleUndo();
+        return;
+      }
+      const isSkipKey = !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 's';
+      if (isSkipKey && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        handleSkip();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleUndo]);
+  }, [handleUndo, handleSkip]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const overId = event.over?.id;
@@ -376,8 +398,8 @@ export function TriageView({
         <div className="flex items-center justify-center gap-2 border-b border-border bg-muted/30 px-4 py-2 text-center text-xs text-muted-foreground">
           <Sparkles size={14} className="shrink-0 text-primary" />
           <span>
-            Go through a messy window one tab at a time: close what you don't need, or file the
-            rest into a snapshot.
+            Go through a messy window one tab at a time: close what you don't need, file the
+            rest into a snapshot, or skip a tab to leave it as it is.
           </span>
         </div>
 
@@ -423,6 +445,14 @@ export function TriageView({
                 Drag or click a target to file the tab
               </span>
               <span className="flex items-center gap-1.5">
+                <SkipForward size={16} />
+                Skip leaves it open (press{' '}
+                <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
+                  S
+                </kbd>
+                )
+              </span>
+              <span className="flex items-center gap-1.5">
                 <Keyboard size={16} />
                 Undo with{' '}
                 <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
@@ -435,14 +465,23 @@ export function TriageView({
               </span>
             </div>
 
-            <Button
-              variant="outline"
-              className="border-emerald-400 bg-emerald-400 text-emerald-950 hover:bg-emerald-300"
-              onClick={onExit}
-              title="Stop sorting now — every tab you haven't gotten to yet stays open, untouched"
-            >
-              <CheckCircle2 size={16} className="mr-1.5" /> Finish
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={handleSkip}
+                title="Leave this tab open, untouched, and move on to the next one"
+              >
+                <SkipForward size={16} className="mr-1.5" /> Skip
+              </Button>
+              <Button
+                variant="outline"
+                className="border-emerald-400 bg-emerald-400 text-emerald-950 hover:bg-emerald-300"
+                onClick={onExit}
+                title="Stop sorting now — every tab you haven't gotten to yet stays open, untouched"
+              >
+                <CheckCircle2 size={16} className="mr-1.5" /> Finish
+              </Button>
+            </div>
           </div>
 
           <div className="relative z-20 flex w-[22%] min-w-[220px] flex-col gap-3 overflow-y-auto border-l border-border bg-muted/30 p-4">

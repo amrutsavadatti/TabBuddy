@@ -66,6 +66,17 @@ without going to the dashboard. It's empty until you've opened at least one
 snapshot, and never shows the Archived snapshot or the one already linked to
 your current window (that one has its own Update button above).
 
+### Searching from the popup
+
+Once you have at least one snapshot, a **Search snapshots** box appears above
+that list. Type part of a name (case doesn't matter) and the list switches to
+the snapshots that match, with names starting with what you typed first, then
+the ones you open most. Click one, or press **Enter** to open the top result;
+the popup closes as it opens. It searches every snapshot, including the
+Archived one and the one linked to your current window, so you can find
+things the Most used list leaves out. **Esc** or the **×** clears the box and
+brings the Most used list back.
+
 ## Opening a saved snapshot
 
 From the dashboard, click **Open** on any snapshot.
