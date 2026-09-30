@@ -158,7 +158,10 @@ Dashboard, Automation, Quick links, Your data and Help. Click an icon to see
 the settings inside it, and click it again (or another icon) to close or switch.
 
 Open the dashboard by clicking **Open dashboard** in the popup, or with
-the [keyboard shortcut](#keyboard-shortcut). It shows every saved
+the [keyboard shortcut](#keyboard-shortcut). It opens in a window of its own,
+so it doesn't add a tab to the window you're working in; ask for it again
+and TabBuddy brings that window to the front instead of opening a second one.
+It shows every saved
 snapshot as a card, organized into:
 
 - **📌 Pinned** — snapshots you've explicitly pinned, always at the top
@@ -397,8 +400,8 @@ preference, so it stays your pick across sessions.
 ## Keyboard shortcut
 
 Press **Ctrl+Shift+K** (**Cmd+Shift+K** on Mac) from anywhere in the
-browser to open the dashboard — or jump straight to it if it's already
-open in another tab.
+browser to open the dashboard in its own window — or jump straight to it
+if it's already open.
 
 Want a different key combo? Go to `chrome://extensions/shortcuts` and
 change it there.
