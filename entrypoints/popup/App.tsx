@@ -14,6 +14,9 @@ import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
 import { LayoutGrid, Search, Shuffle, X } from 'lucide-react';
+import { clearPendingNudge, getPendingNudge } from '@/lib/nudgePending';
+import { snoozeUrl } from '@/lib/nudgeState';
+import { archiveTab } from '@/lib/archive';
 import { PlayingNow, usePlayingTabs } from '@/components/PlayingNow';
 
 const MOST_USED_COUNT = 3;
@@ -36,6 +39,47 @@ function SnapshotRow({ snapshot, onOpen }: { snapshot: Snapshot; onOpen: (s: Sna
   );
 }
 
+interface NudgeTab {
+  id: number;
+  title: string;
+  url: string;
+  favIconUrl?: string;
+  pinned: boolean;
+}
+
+/** The pending "close this stale tab?" question, shown when TabBuddy nudges. */
+function NudgeCard({ tab, onDone }: { tab: NudgeTab; onDone: () => void }) {
+  const finish = async (action: () => Promise<unknown>) => {
+    await action();
+    await clearPendingNudge();
+    onDone();
+  };
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+      <p className="text-xs font-medium text-muted-foreground">Still need this tab?</p>
+      <div className="flex items-center gap-2">
+        {tab.favIconUrl ? (
+          <img src={tab.favIconUrl} alt="" className="h-6 w-6 rounded" />
+        ) : (
+          <div className="h-6 w-6 rounded bg-muted" />
+        )}
+        <p className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold">{tab.title || tab.url}</p>
+      </div>
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" className="flex-1" onClick={() => finish(() => browser.tabs.remove(tab.id).catch(() => {}))}>
+          Close
+        </Button>
+        <Button size="sm" variant="outline" className="flex-1" onClick={() => finish(() => archiveTab(tab))}>
+          Archive
+        </Button>
+        <Button size="sm" className="flex-1" onClick={() => finish(() => snoozeUrl(tab.url))}>
+          Keep
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'updating' | 'updated'>('idle');
@@ -46,6 +90,26 @@ function App() {
   const [nameInput, setNameInput] = useState(() => generateSnapshotName());
   const [groupStatus, setGroupStatus] = useState<'idle' | 'grouping' | 'done'>('idle');
   const playing = usePlayingTabs();
+  const [nudgeTab, setNudgeTab] = useState<NudgeTab | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const pending = await getPendingNudge();
+      if (!pending) return;
+      try {
+        const t = await browser.tabs.get(pending.tabId);
+        setNudgeTab({
+          id: pending.tabId,
+          title: t.title ?? '',
+          url: t.url ?? '',
+          favIconUrl: t.favIconUrl,
+          pinned: t.pinned ?? false,
+        });
+      } catch {
+        await clearPendingNudge(); // tab closed before the user answered
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -124,6 +188,8 @@ function App() {
   return (
     <div className="flex w-72 flex-col gap-3 p-4">
       <h1 className="text-base font-semibold">TabBuddy</h1>
+
+      {nudgeTab && <NudgeCard tab={nudgeTab} onDone={() => window.close()} />}
 
       <PlayingNow tabs={playing.tabs} onChanged={playing.refresh} onJumped={() => window.close()} />
 

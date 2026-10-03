@@ -14,7 +14,7 @@ import {
 } from '@/lib/nudgeSettings';
 import { ensureNudgeAlarm, NUDGE_ALARM_NAME } from '@/lib/nudgeAlarm';
 import { AWAY_AFTER_SECONDS, checkNudgeGate, noteReturnedFromAway } from '@/lib/nudgeGate';
-import { closeNudgesFor, openNextNudge } from '@/lib/nudgeWindow';
+import { clearPendingNudgeFor, presentNextNudge, presentNudge } from '@/lib/nudgePending';
 
 export default defineBackground(() => {
   ensureArchivedSnapshotExists();
@@ -29,16 +29,16 @@ export default defineBackground(() => {
     reconcileAfterReload();
   });
 
-  // Tabs closed (or opened by the user) while a nudge is asking about them:
-  // close that nudge so it can never block the next one.
+  // A tab closed while a nudge is asking about it: drop that question so it
+  // can never block the next one. (Switching to the tab doesn't count — the
+  // nudge itself does that to point the user at it.)
   browser.tabs.onRemoved.addListener((tabId) => {
     updatePlayingBadge().catch(() => {});
-    closeNudgesFor(tabId);
+    clearPendingNudgeFor(tabId);
     unmanageTab(tabId);
     forgetAsked(tabId);
   });
   browser.tabs.onActivated.addListener(async ({ tabId }) => {
-    closeNudgesFor(tabId);
     // Quick links: switching to a tab counts as a visit to its site.
     try {
       const tab = await browser.tabs.get(tabId);
@@ -81,12 +81,12 @@ export default defineBackground(() => {
     const threshold = inactivityThresholdMs ?? (await getNudgeStaleMinutes()) * 60_000;
     const candidates = await runNudgeScan(threshold);
     // Least recently asked first, so a dismissed tab goes to the back of the
-    // line. openNextNudge does nothing while a nudge popup is already open.
+    // line. presentNextNudge does nothing while a question is still waiting.
     const ordered = orderByLeastRecentlyAsked(
       candidates.map((c) => c.id),
       await getAskedMap(),
     );
-    await openNextNudge(ordered);
+    await presentNextNudge(ordered);
   };
 
   browser.commands.onCommand.addListener((command) => {
@@ -122,4 +122,13 @@ export default defineBackground(() => {
   // windowed when testing this.
   (self as unknown as { runNudgeScanNow: typeof scanAndMaybeNudge }).runNudgeScanNow =
     scanAndMaybeNudge;
+
+  // Spike: from the service worker console, `runNudgeSpike()` runs the
+  // toolbar-popup nudge on the first stale tab (or pass a tab id).
+  (self as unknown as { runNudgeSpike: (tabId?: number) => Promise<unknown> }).runNudgeSpike =
+    async (tabId?: number) => {
+      const id = tabId ?? (await runNudgeScan(60_000))[0]?.id;
+      if (id === undefined) return 'no candidate tab';
+      return presentNudge(id);
+    };
 });
