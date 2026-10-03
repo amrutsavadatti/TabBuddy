@@ -2,6 +2,33 @@
 
 All notable changes to TabBuddy are listed here, newest first.
 
+## 1.0.5
+
+### Added
+- **Nudges point at the tab and ask in the toolbar popup.** When a stale tab
+  is due a decision, TabBuddy switches to it, puts a **?** on the toolbar
+  icon, and opens the extension popup with Close, Archive, and Keep. The
+  separate nudge window is gone. (Chrome only opens the popup by itself while
+  a browser window is focused; otherwise click the icon and the question is
+  waiting.)
+- **Click the nudge to jump to its tab.** The question in the popup takes you
+  to the tab it's about, even if it's in another window.
+- **A pending nudge shows on the dashboard.** While a question is waiting, a
+  small pulsing tab sits on the dashboard's right edge. Click it to slide out
+  the card, then jump to the tab or decide right there, so an ignored nudge
+  can't go unnoticed.
+- **Skip a tab in Sort tabs one by one.** A **Skip** button (or the **S** key)
+  leaves a tab open and untouched and moves on. Undo steps back over a skip,
+  and the window is only closed at the end if nothing was skipped.
+- **Search snapshots from the popup.** A search box finds any snapshot by
+  name; **Enter** opens the top result and **Esc** clears the box. The
+  dashboard search uses the same filter.
+
+### Changed
+- **The dashboard opens in its own window** instead of adding a tab to the
+  window you're working in. Asking for it again brings that window to the
+  front rather than opening a second one.
+
 ## 1.0.4
 
 ### Added
