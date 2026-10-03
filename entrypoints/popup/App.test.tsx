@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { addSnapshot } from '@/lib/storage';
+import { isUrlSnoozed } from '@/lib/nudgeState';
 import { makeSnapshot } from '@/test/factories';
 
 const restore = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
@@ -145,5 +146,78 @@ describe('the popup search bar', () => {
     expect(rows().map((r) => r.title)).toEqual(['Open "Linked work"']);
     await typeQuery('archived');
     expect(rows().map((r) => r.title)).toEqual(['Open "Archived"']);
+  });
+});
+
+describe('the popup nudge card', () => {
+  const button = (label: string) =>
+    [...document.body.querySelectorAll('button')].find((b) => b.textContent === label)!;
+  const click = (label: string) =>
+    act(async () => {
+      button(label).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+  async function nudgeAbout(tab: { id: number; url: string; title: string }) {
+    vi.spyOn(fakeBrowser.tabs, 'get').mockResolvedValue({ ...tab, pinned: false } as never);
+    await fakeBrowser.storage.session.set({ nudgePending: { tabId: tab.id, askedAt: 1 } });
+    await show();
+  }
+
+  it('is hidden when nothing is pending', async () => {
+    await show();
+    expect(text()).not.toContain('Still need this tab?');
+  });
+
+  it('asks about the pending tab', async () => {
+    await nudgeAbout({ id: 7, url: 'https://old.example/', title: 'Old page' });
+    expect(text()).toContain('Still need this tab?');
+    expect(text()).toContain('Old page');
+  });
+
+  it('clicking the card jumps to the tab, leaves the question pending and closes the popup', async () => {
+    const activate = vi.spyOn(fakeBrowser.tabs, 'update').mockResolvedValue({} as never);
+    vi.spyOn(fakeBrowser.windows, 'update').mockResolvedValue({} as never);
+    await nudgeAbout({ id: 7, url: 'https://old.example/', title: 'Old page' });
+
+    await act(async () => {
+      document.body
+        .querySelector('button[title="Go to this tab"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(activate).toHaveBeenCalledWith(7, { active: true });
+    expect((await fakeBrowser.storage.session.get('nudgePending')).nudgePending).toBeDefined();
+    expect(window.close).toHaveBeenCalled();
+  });
+
+  it('Close closes the tab and clears the question', async () => {
+    const remove = vi.spyOn(fakeBrowser.tabs, 'remove').mockResolvedValue(undefined as never);
+    await nudgeAbout({ id: 7, url: 'https://old.example/', title: 'Old page' });
+
+    await click('Close');
+
+    expect(remove).toHaveBeenCalledWith(7);
+    expect((await fakeBrowser.storage.session.get('nudgePending')).nudgePending).toBeUndefined();
+    expect(window.close).toHaveBeenCalled();
+  });
+
+  it('Keep snoozes the page without closing the tab', async () => {
+    const remove = vi.spyOn(fakeBrowser.tabs, 'remove');
+    await nudgeAbout({ id: 7, url: 'https://old.example/', title: 'Old page' });
+
+    await click('Keep');
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(await isUrlSnoozed('https://old.example/')).toBe(true);
+    expect((await fakeBrowser.storage.session.get('nudgePending')).nudgePending).toBeUndefined();
+  });
+
+  it('drops the question when the tab is already gone', async () => {
+    vi.spyOn(fakeBrowser.tabs, 'get').mockRejectedValue(new Error('No tab'));
+    await fakeBrowser.storage.session.set({ nudgePending: { tabId: 7, askedAt: 1 } });
+    await show();
+
+    expect(text()).not.toContain('Still need this tab?');
+    expect((await fakeBrowser.storage.session.get('nudgePending')).nudgePending).toBeUndefined();
   });
 });

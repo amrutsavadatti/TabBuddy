@@ -1,7 +1,8 @@
 import { markAsked } from './nudgeAsked';
 import { updatePlayingBadge } from './playingBadge';
+import type { TriageTab } from './triage';
 
-const PENDING_KEY = 'nudgePending';
+export const PENDING_KEY = 'nudgePending';
 const BADGE_TEXT = '?';
 
 export interface PendingNudge {
@@ -20,18 +21,45 @@ export async function clearPendingNudge(): Promise<void> {
   await updatePlayingBadge();
 }
 
+/** Brings the tab to the front, in whichever window it lives. The tab is
+ * activated first: focusing the window can close the toolbar popup this is
+ * often called from, and the call would never finish. */
+export async function jumpToTab(tabId: number): Promise<void> {
+  await browser.tabs.update(tabId, { active: true });
+  const tab = await browser.tabs.get(tabId);
+  if (tab.windowId !== undefined) {
+    await browser.windows.update(tab.windowId, { focused: true });
+  }
+}
+
+/** The tab the pending nudge is asking about, or null when nothing is pending.
+ * A question about a tab that no longer exists is dropped on the way. */
+export async function getPendingNudgeTab(): Promise<TriageTab | null> {
+  const pending = await getPendingNudge();
+  if (!pending) return null;
+  try {
+    const t = await browser.tabs.get(pending.tabId);
+    return {
+      id: pending.tabId,
+      title: t.title ?? '',
+      url: t.url ?? '',
+      favIconUrl: t.favIconUrl,
+      pinned: t.pinned ?? false,
+    };
+  } catch {
+    await clearPendingNudge(); // tab closed before the user answered
+    return null;
+  }
+}
+
 /** Points the user at a stale tab and asks about it in the toolbar popup:
  * switches to the tab, remembers the question, badges the icon, and tries to
  * open the popup. Chrome only allows the auto-open while a browser window is
  * focused, so a failure is expected and non-fatal — the badge stays and the
  * question is waiting the next time the icon is clicked. Returns whether the
  * popup opened. */
-export async function presentNudge(tabId: number): Promise<boolean> {
-  const tab = await browser.tabs.get(tabId);
-  if (tab.windowId !== undefined) {
-    await browser.windows.update(tab.windowId, { focused: true });
-  }
-  await browser.tabs.update(tabId, { active: true });
+async function presentNudge(tabId: number): Promise<boolean> {
+  await jumpToTab(tabId);
 
   await browser.storage.session.set({
     [PENDING_KEY]: { tabId, askedAt: Date.now() } satisfies PendingNudge,

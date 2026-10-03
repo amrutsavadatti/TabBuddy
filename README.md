@@ -41,7 +41,7 @@ and get them back with one click.
   dashboard's settings bar.
 - **Tab hoarder nudges.** TabBuddy checks on a schedule you set for tabs
   you've left untouched (you choose what "stale" means), and nudges you to
-  Close, Archive & Close (into a reserved, pinned "Archived" snapshot), or
+  Close, Archive (into a reserved, pinned "Archived" snapshot), or
   Keep (snoozes for 2 days). Set how often and how old is stale, in
   minutes, hours, or days, from the dashboard's settings bar.
 - **Keyboard shortcut.** `Ctrl+Shift+K` (`Cmd+Shift+K` on Mac) opens the

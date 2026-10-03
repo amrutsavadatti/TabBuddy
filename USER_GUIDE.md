@@ -356,20 +356,27 @@ since it would otherwise fight with checkbox clicking.
 
 On a schedule you pick, TabBuddy quietly checks your open tabs for ones
 you haven't touched for as long as you say (pinned and audible tabs are never nudged)
-and shows a small popup asking what to do with one of them:
+and points you at one: TabBuddy switches to that tab, puts a **?** on its toolbar
+icon, and opens the extension popup asking what to do with it (if the popup can't
+open by itself, click the icon):
 
 - **Close** — closes the tab, nothing saved.
-- **Archive & Close** — saves the tab into a reserved **Archived**
+- **Archive** — saves the tab into a reserved **Archived**
   snapshot (created automatically, pinned by default, and can't be
   deleted), then closes it.
 - **Keep** — snoozes that page for 2 days before it can be nudged again.
   The snooze is remembered by the page's address, so it survives a browser
   restart and also covers any other tab open on the same page.
 
-Only one popup is ever open at a time. While a nudge is waiting for you,
-no new one appears — TabBuddy only moves on once you pick an option or
-dismiss the window. If you close the tab yourself, or open it, its popup
-closes on its own. Nudges then come at most one per check, so several
+If you ignore the popup, the question stays put and the icon keeps its **?**.
+Click the question in the popup to jump to that tab, even if it's in another
+window. The dashboard also shows a small pulsing tab on its right edge while a
+question is waiting; click it to slide the card out, then jump to the tab or
+decide right there.
+
+Only one question is ever waiting at a time. While a nudge is unanswered,
+no new one appears — TabBuddy only moves on once you pick an option. If you
+close the tab yourself, the question goes away. Nudges then come at most one per check, so several
 stale tabs are asked about one at a time. A tab you dismissed goes to the
 back of the line rather than coming straight back.
 

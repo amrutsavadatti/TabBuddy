@@ -14,7 +14,7 @@ import {
 } from '@/lib/nudgeSettings';
 import { ensureNudgeAlarm, NUDGE_ALARM_NAME } from '@/lib/nudgeAlarm';
 import { AWAY_AFTER_SECONDS, checkNudgeGate, noteReturnedFromAway } from '@/lib/nudgeGate';
-import { clearPendingNudgeFor, presentNextNudge, presentNudge } from '@/lib/nudgePending';
+import { clearPendingNudgeFor, presentNextNudge } from '@/lib/nudgePending';
 
 export default defineBackground(() => {
   ensureArchivedSnapshotExists();
@@ -116,19 +116,7 @@ export default defineBackground(() => {
   // (chrome://extensions -> TabBuddy -> "service worker"), run
   // `runNudgeScanNow()` to test without waiting for the real alarm, or
   // `runNudgeScanNow(60_000)` to treat 1-minute-old tabs as stale.
-  //
-  // Important for testing: don't run this from a fullscreen DevTools
-  // panel — the popup can inherit that fullscreen state. Keep DevTools
-  // windowed when testing this.
+  // Needs a focused browser window for the toolbar popup to auto-open.
   (self as unknown as { runNudgeScanNow: typeof scanAndMaybeNudge }).runNudgeScanNow =
     scanAndMaybeNudge;
-
-  // Spike: from the service worker console, `runNudgeSpike()` runs the
-  // toolbar-popup nudge on the first stale tab (or pass a tab id).
-  (self as unknown as { runNudgeSpike: (tabId?: number) => Promise<unknown> }).runNudgeSpike =
-    async (tabId?: number) => {
-      const id = tabId ?? (await runNudgeScan(60_000))[0]?.id;
-      if (id === undefined) return 'no candidate tab';
-      return presentNudge(id);
-    };
 });

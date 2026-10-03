@@ -81,6 +81,7 @@ import { SettingsBar } from './SettingsBar';
 import { HoverPeek } from './HoverPeek';
 import { useToast } from '@/components/Toaster';
 import { QuickLinks } from './QuickLinks';
+import { NudgePeek } from './NudgePeek';
 import { PlayingPill } from './PlayingPill';
 import { focusOrOpenSite } from '@/lib/quickLinks';
 import {
@@ -1360,6 +1361,8 @@ function App() {
           </Button>
         </div>
       </div>
+
+      <NudgePeek />
 
       <SettingsBar
         open={settingsOpen}
