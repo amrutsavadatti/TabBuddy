@@ -60,8 +60,8 @@ async function getOrCreateArchivedSnapshot(): Promise<Snapshot> {
 }
 
 /** Appends a tab to the reserved "Archived" snapshot (creating it on first
- * use) and closes the real browser tab. Used by the nudge popup's
- * "Archive & Close" action. */
+ * use) and closes the real browser tab. Used by the nudge's
+ * Archive action. */
 export async function archiveTab(tab: TriageTab): Promise<void> {
   await archiveTabs([tab]);
 }

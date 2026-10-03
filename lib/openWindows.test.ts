@@ -78,7 +78,7 @@ describe('shapeOpenWindows', () => {
   it("leaves out TabBuddy's own pages, and drops a window left empty", () => {
     const result = shape([
       { id: 1, tabs: [tab(1), tab(2, { url: `${ORIGIN}dashboard.html` })] },
-      { id: 2, tabs: [tab(3, { url: `${ORIGIN}nudge.html?tab=9` })] }, // nudge popup
+      { id: 2, tabs: [tab(3, { url: `${ORIGIN}lazy.html?tab=9` })] }, // lazy-restore page
     ]);
     expect(result.windows.map((w) => [w.windowId, w.tabs.map((t) => t.id)])).toEqual([[1, [1]]]);
   });

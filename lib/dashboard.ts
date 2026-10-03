@@ -1,5 +1,8 @@
 import { buildTriageUrl } from './manualTriage';
 
+/** Opens the dashboard in a window of its own the first time it is asked for, so
+ * it doesn't add a tab to the window you are working in. Asked for again, it
+ * brings the dashboard that is already open to the front instead. */
 export async function openOrFocusDashboard(): Promise<void> {
   const dashboardUrl = browser.runtime.getURL('/dashboard.html');
   const tabs = await browser.tabs.query({ url: dashboardUrl });
@@ -13,7 +16,7 @@ export async function openOrFocusDashboard(): Promise<void> {
     return;
   }
 
-  await browser.tabs.create({ url: dashboardUrl });
+  await browser.windows.create({ url: dashboardUrl, focused: true });
 }
 
 /** Opens the one-by-one sorting screen. Without `onlyTabIds` it sorts the whole

@@ -67,6 +67,17 @@ without going to the dashboard. It's empty until you've opened at least one
 snapshot, and never shows the Archived snapshot or the one already linked to
 your current window (that one has its own Update button above).
 
+### Searching from the popup
+
+Once you have at least one snapshot, a **Search snapshots** box appears above
+that list. Type part of a name (case doesn't matter) and the list switches to
+the snapshots that match, with names starting with what you typed first, then
+the ones you open most. Click one, or press **Enter** to open the top result;
+the popup closes as it opens. It searches every snapshot, including the
+Archived one and the one linked to your current window, so you can find
+things the Most used list leaves out. **Esc** or the **×** clears the box and
+brings the Most used list back.
+
 ## Opening a saved snapshot
 
 From the dashboard, click **Open** on any snapshot.
@@ -148,7 +159,10 @@ Dashboard, Automation, Quick links, Your data and Help. Click an icon to see
 the settings inside it, and click it again (or another icon) to close or switch.
 
 Open the dashboard by clicking **Open dashboard** in the popup, or with
-the [keyboard shortcut](#keyboard-shortcut). It shows every saved
+the [keyboard shortcut](#keyboard-shortcut). It opens in a window of its own,
+so it doesn't add a tab to the window you're working in; ask for it again
+and TabBuddy brings that window to the front instead of opening a second one.
+It shows every saved
 snapshot as a card, organized into:
 
 - **📌 Pinned** — snapshots you've explicitly pinned, always at the top
@@ -343,20 +357,27 @@ since it would otherwise fight with checkbox clicking.
 
 On a schedule you pick, TabBuddy quietly checks your open tabs for ones
 you haven't touched for as long as you say (pinned and audible tabs are never nudged)
-and shows a small popup asking what to do with one of them:
+and points you at one: TabBuddy switches to that tab, puts a **?** on its toolbar
+icon, and opens the extension popup asking what to do with it (if the popup can't
+open by itself, click the icon):
 
 - **Close** — closes the tab, nothing saved.
-- **Archive & Close** — saves the tab into a reserved **Archived**
+- **Archive** — saves the tab into a reserved **Archived**
   snapshot (created automatically, pinned by default, and can't be
   deleted), then closes it.
 - **Keep** — snoozes that page for 2 days before it can be nudged again.
   The snooze is remembered by the page's address, so it survives a browser
   restart and also covers any other tab open on the same page.
 
-Only one popup is ever open at a time. While a nudge is waiting for you,
-no new one appears — TabBuddy only moves on once you pick an option or
-dismiss the window. If you close the tab yourself, or open it, its popup
-closes on its own. Nudges then come at most one per check, so several
+If you ignore the popup, the question stays put and the icon keeps its **?**.
+Click the question in the popup to jump to that tab, even if it's in another
+window. The dashboard also shows a small pulsing tab on its right edge while a
+question is waiting; click it to slide the card out, then jump to the tab or
+decide right there.
+
+Only one question is ever waiting at a time. While a nudge is unanswered,
+no new one appears — TabBuddy only moves on once you pick an option. If you
+close the tab yourself, the question goes away. Nudges then come at most one per check, so several
 stale tabs are asked about one at a time. A tab you dismissed goes to the
 back of the line rather than coming straight back.
 
@@ -474,8 +495,8 @@ connect, `tabbuddy-bridge doctor` is the first thing to try.
 ## Keyboard shortcut
 
 Press **Ctrl+Shift+K** (**Cmd+Shift+K** on Mac) from anywhere in the
-browser to open the dashboard — or jump straight to it if it's already
-open in another tab.
+browser to open the dashboard in its own window — or jump straight to it
+if it's already open.
 
 Want a different key combo? Go to `chrome://extensions/shortcuts` and
 change it there.

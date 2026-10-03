@@ -14,7 +14,7 @@ import {
 } from '@/lib/nudgeSettings';
 import { ensureNudgeAlarm, NUDGE_ALARM_NAME } from '@/lib/nudgeAlarm';
 import { AWAY_AFTER_SECONDS, checkNudgeGate, noteReturnedFromAway } from '@/lib/nudgeGate';
-import { closeNudgesFor, openNextNudge } from '@/lib/nudgeWindow';
+import { clearPendingNudgeFor, presentNextNudge } from '@/lib/nudgePending';
 import { startAgentBridge } from '@/lib/agentBridgeConnection';
 
 export default defineBackground(() => {
@@ -31,16 +31,16 @@ export default defineBackground(() => {
     reconcileAfterReload();
   });
 
-  // Tabs closed (or opened by the user) while a nudge is asking about them:
-  // close that nudge so it can never block the next one.
+  // A tab closed while a nudge is asking about it: drop that question so it
+  // can never block the next one. (Switching to the tab doesn't count — the
+  // nudge itself does that to point the user at it.)
   browser.tabs.onRemoved.addListener((tabId) => {
     updatePlayingBadge().catch(() => {});
-    closeNudgesFor(tabId);
+    clearPendingNudgeFor(tabId);
     unmanageTab(tabId);
     forgetAsked(tabId);
   });
   browser.tabs.onActivated.addListener(async ({ tabId }) => {
-    closeNudgesFor(tabId);
     // Quick links: switching to a tab counts as a visit to its site.
     try {
       const tab = await browser.tabs.get(tabId);
@@ -83,12 +83,12 @@ export default defineBackground(() => {
     const threshold = inactivityThresholdMs ?? (await getNudgeStaleMinutes()) * 60_000;
     const candidates = await runNudgeScan(threshold);
     // Least recently asked first, so a dismissed tab goes to the back of the
-    // line. openNextNudge does nothing while a nudge popup is already open.
+    // line. presentNextNudge does nothing while a question is still waiting.
     const ordered = orderByLeastRecentlyAsked(
       candidates.map((c) => c.id),
       await getAskedMap(),
     );
-    await openNextNudge(ordered);
+    await presentNextNudge(ordered);
   };
 
   browser.commands.onCommand.addListener((command) => {
@@ -118,10 +118,7 @@ export default defineBackground(() => {
   // (chrome://extensions -> TabBuddy -> "service worker"), run
   // `runNudgeScanNow()` to test without waiting for the real alarm, or
   // `runNudgeScanNow(60_000)` to treat 1-minute-old tabs as stale.
-  //
-  // Important for testing: don't run this from a fullscreen DevTools
-  // panel — the popup can inherit that fullscreen state. Keep DevTools
-  // windowed when testing this.
+  // Needs a focused browser window for the toolbar popup to auto-open.
   (self as unknown as { runNudgeScanNow: typeof scanAndMaybeNudge }).runNudgeScanNow =
     scanAndMaybeNudge;
 });

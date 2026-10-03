@@ -4,6 +4,7 @@ import { addSnapshot, getSnapshots } from '@/lib/storage';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { restoreSnapshot } from '@/lib/restore';
 import { getMostUsedSnapshots } from '@/lib/sort';
+import { searchSnapshots } from '@/lib/searchSnapshots';
 import { generateSnapshotName, getUniqueName } from '@/lib/names';
 import { openOrFocusDashboard, openTriageSession } from '@/lib/dashboard';
 import { autoGroupByDomain } from '@/lib/autoGroup';
@@ -12,19 +13,41 @@ import { getStoredVibe } from '@/lib/vibes';
 import type { Snapshot } from '@/lib/types';
 import { getAccentColor } from '@/lib/color';
 import { Button } from '@/components/ui/button';
-import { LayoutGrid, Shuffle } from 'lucide-react';
+import { LayoutGrid, Search, Shuffle, X } from 'lucide-react';
+import { NudgeCard, usePendingNudge } from '@/components/NudgeCard';
 import { PlayingNow, usePlayingTabs } from '@/components/PlayingNow';
 
 const MOST_USED_COUNT = 3;
+/** Search results shown before the list scrolls. */
+const RESULTS_VISIBLE = 5;
+
+function SnapshotRow({ snapshot, onOpen }: { snapshot: Snapshot; onOpen: (s: Snapshot) => void }) {
+  return (
+    <button
+      onClick={() => onOpen(snapshot)}
+      title={`Open "${snapshot.name}"`}
+      className="flex shrink-0 items-center gap-2 rounded-lg border-t-4 border-border bg-card px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted"
+      style={{ borderTopColor: getAccentColor(snapshot.name) }}
+    >
+      <span className="min-w-0 flex-1 truncate font-medium">{snapshot.name}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {snapshot.tabs.length} tab{snapshot.tabs.length === 1 ? '' : 's'}
+      </span>
+    </button>
+  );
+}
 
 function App() {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'updating' | 'updated'>('idle');
   const [linkedSnapshot, setLinkedSnapshot] = useState<Snapshot | null>(null);
   const [mostUsed, setMostUsed] = useState<Snapshot[]>([]);
+  const [allSnapshots, setAllSnapshots] = useState<Snapshot[]>([]);
+  const [query, setQuery] = useState('');
   const [nameInput, setNameInput] = useState(() => generateSnapshotName());
   const [groupStatus, setGroupStatus] = useState<'idle' | 'grouping' | 'done'>('idle');
   const playing = usePlayingTabs();
+  const nudgeTab = usePendingNudge();
 
   useEffect(() => {
     (async () => {
@@ -32,6 +55,7 @@ function App() {
       const snapshots = await getSnapshots();
       const match = snapshots.find((s) => s.linkedWindowId === currentWindow.id);
       setLinkedSnapshot(match ?? null);
+      setAllSnapshots(snapshots);
       // Already shown above with its own Update button — no need to repeat it.
       setMostUsed(
         getMostUsedSnapshots(
@@ -48,6 +72,19 @@ function App() {
   const openMostUsed = async (snapshot: Snapshot) => {
     await restoreSnapshot(snapshot);
     window.close();
+  };
+
+  const searching = query.trim() !== '';
+  const results = searchSnapshots(allSnapshots, query);
+
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && results[0]) {
+      e.preventDefault();
+      openMostUsed(results[0]);
+    } else if (e.key === 'Escape' && searching) {
+      e.preventDefault();
+      setQuery('');
+    }
   };
 
   const openDashboard = () => {
@@ -90,6 +127,8 @@ function App() {
     <div className="flex w-72 flex-col gap-3 p-4">
       <h1 className="text-base font-semibold">TabBuddy</h1>
 
+      {nudgeTab && <NudgeCard tab={nudgeTab} onJumped={() => window.close()} onDone={() => window.close()} />}
+
       <PlayingNow tabs={playing.tabs} onChanged={playing.refresh} onJumped={() => window.close()} />
 
       {linkedSnapshot && (
@@ -122,24 +161,60 @@ function App() {
         </div>
       )}
 
-      {mostUsed.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <p className="px-1 text-xs font-medium text-muted-foreground">Most used</p>
-          {mostUsed.map((s) => (
+      {allSnapshots.length > 0 && (
+        <div className="relative">
+          <Search
+            size={14}
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+            placeholder="Search snapshots..."
+            aria-label="Search snapshots"
+            className="w-full rounded-lg border border-border bg-background py-1 pl-8 pr-7 text-sm outline-none focus:ring-2 focus:ring-primary/40 [&::-webkit-search-cancel-button]:hidden"
+          />
+          {searching && (
             <button
-              key={s.id}
-              onClick={() => openMostUsed(s)}
-              title={`Open "${s.name}"`}
-              className="flex items-center gap-2 rounded-lg border-t-4 border-border bg-card px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted"
-              style={{ borderTopColor: getAccentColor(s.name) }}
+              onClick={() => setQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              title="Clear search"
+              aria-label="Clear search"
             >
-              <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {s.tabs.length} tab{s.tabs.length === 1 ? '' : 's'}
-              </span>
+              <X size={13} />
             </button>
-          ))}
+          )}
         </div>
+      )}
+
+      {searching ? (
+        <div className="flex flex-col gap-1">
+          {results.length === 0 ? (
+            <p className="px-1 py-2 text-center text-xs text-muted-foreground">
+              No snapshots match "{query.trim()}".
+            </p>
+          ) : (
+            <div
+              className="flex flex-col gap-1 overflow-y-auto"
+              style={{ maxHeight: `${RESULTS_VISIBLE * 2.75}rem` }}
+            >
+              {results.map((s) => (
+                <SnapshotRow key={s.id} snapshot={s} onOpen={openMostUsed} />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        mostUsed.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <p className="px-1 text-xs font-medium text-muted-foreground">Most used</p>
+            {mostUsed.map((s) => (
+              <SnapshotRow key={s.id} snapshot={s} onOpen={openMostUsed} />
+            ))}
+          </div>
+        )
       )}
 
       <Button size="sm" variant="outline" onClick={openDashboard}>

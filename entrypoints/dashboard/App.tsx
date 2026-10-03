@@ -63,6 +63,7 @@ import { downloadSnapshotsAsFile, parseImportWithCategories } from '@/lib/export
 import { restoreSnapshot } from '@/lib/restore';
 import { updateSnapshotFromLiveWindow } from '@/lib/update';
 import { getDisplayOrder, SORT_OPTIONS, type SortOption } from '@/lib/sort';
+import { filterSnapshotsByName } from '@/lib/searchSnapshots';
 import { VIBES, getStoredVibe, setStoredVibe, type Vibe } from '@/lib/vibes';
 import { getHoverPeekEnabled, setHoverPeekEnabled } from '@/lib/peek';
 import { getLazyRestoreEnabled, setLazyRestoreEnabled } from '@/lib/lazyRestore';
@@ -88,6 +89,7 @@ import { SettingsBar } from './SettingsBar';
 import { HoverPeek } from './HoverPeek';
 import { useToast } from '@/components/Toaster';
 import { QuickLinks } from './QuickLinks';
+import { NudgePeek } from './NudgePeek';
 import { PlayingPill } from './PlayingPill';
 import { focusOrOpenSite } from '@/lib/quickLinks';
 import {
@@ -213,7 +215,7 @@ const ONBOARDING_STEPS: {
     icon: Shuffle,
     title: 'Sort tabs one by one',
     description:
-      'A Tinder-style triage screen: drag or click each tab left to close it, or right to file it into a new or existing snapshot. Undo anytime with Cmd/Ctrl+Z.',
+      'A Tinder-style triage screen: drag or click each tab left to close it, or right to file it into a new or existing snapshot. Not sure? Skip it (or press S) and it stays open. Undo anytime with Cmd/Ctrl+Z.',
     accent: VIBES[0]!.swatch,
   },
   {
@@ -1081,9 +1083,7 @@ function App() {
     patchSnapshot(snapshot.id, { tabs });
   };
 
-  const filteredSnapshots = snapshots.filter((s) =>
-    s.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-  );
+  const filteredSnapshots = filterSnapshotsByName(snapshots, searchQuery);
   const { pinned, unpinned } = getDisplayOrder(filteredSnapshots, sortBy);
 
   const togglePin = async (snapshot: Snapshot) => {
@@ -1452,6 +1452,8 @@ function App() {
           </Button>
         </div>
       </div>
+
+      <NudgePeek />
 
       <SettingsBar
         open={settingsOpen}

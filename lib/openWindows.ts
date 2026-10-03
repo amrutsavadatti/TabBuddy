@@ -31,7 +31,7 @@ export interface ShapeOptions {
   managedTabIds: Set<number>;
   /** Turns a placeholder tab into the real page it stands for. */
   resolveLazy: (tab: TabLike) => TabLike;
-  /** TabBuddy's own pages (dashboard, nudge popup) start with this. */
+  /** TabBuddy's own pages (dashboard, lazy-restore page) start with this. */
   extensionOrigin: string;
   limit?: number;
 }

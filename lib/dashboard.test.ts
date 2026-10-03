@@ -2,13 +2,64 @@ import { describe, expect, it, vi } from 'vitest';
 import { openOrFocusDashboard, openTriageSession } from './dashboard';
 
 describe('openOrFocusDashboard', () => {
-  it('creates a new dashboard tab when none is open', async () => {
-    const createSpy = vi.spyOn(browser.tabs, 'create');
+  it('opens the dashboard in a new window of its own when none is open', async () => {
+    const windowSpy = vi.spyOn(browser.windows, 'create');
+    const tabSpy = vi.spyOn(browser.tabs, 'create');
     await openOrFocusDashboard();
 
-    expect(createSpy).toHaveBeenCalledWith({
+    expect(windowSpy).toHaveBeenCalledTimes(1);
+    expect(windowSpy).toHaveBeenCalledWith({
       url: browser.runtime.getURL('/dashboard.html'),
+      focused: true,
     });
+    expect(tabSpy).not.toHaveBeenCalled(); // not a tab added to the current window
+  });
+
+  it('opens a window only the first time: asking again focuses it', async () => {
+    const dashboardUrl = browser.runtime.getURL('/dashboard.html');
+    const windowSpy = vi.spyOn(browser.windows, 'create').mockImplementation((async () => {
+      // what the browser does: the new window holds one tab showing the page
+      await browser.tabs.create({ url: dashboardUrl });
+      return { id: 7 };
+    }) as never);
+    const tabUpdate = vi.spyOn(browser.tabs, 'update').mockResolvedValue({} as never);
+    const windowUpdate = vi.spyOn(browser.windows, 'update').mockResolvedValue({} as never);
+
+    await openOrFocusDashboard();
+    expect(windowSpy).toHaveBeenCalledTimes(1);
+    expect(tabUpdate).not.toHaveBeenCalled();
+
+    await openOrFocusDashboard();
+    await openOrFocusDashboard();
+    expect(windowSpy).toHaveBeenCalledTimes(1); // still only the one window
+    expect(tabUpdate).toHaveBeenCalledTimes(2);
+    expect(windowUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens a fresh window again once the dashboard has been closed', async () => {
+    const dashboardUrl = browser.runtime.getURL('/dashboard.html');
+    const windowSpy = vi.spyOn(browser.windows, 'create').mockImplementation((async () => {
+      await browser.tabs.create({ url: dashboardUrl });
+      return { id: 7 };
+    }) as never);
+    vi.spyOn(browser.tabs, 'update').mockResolvedValue({} as never);
+    vi.spyOn(browser.windows, 'update').mockResolvedValue({} as never);
+
+    await openOrFocusDashboard();
+    expect(windowSpy).toHaveBeenCalledTimes(1);
+
+    // the user closes the dashboard window: no dashboard tab is left
+    vi.spyOn(browser.tabs, 'query').mockResolvedValue([] as never);
+    await openOrFocusDashboard();
+
+    expect(windowSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not count the sort-tabs screen as an open dashboard', async () => {
+    await browser.tabs.create({ url: browser.runtime.getURL('/dashboard.html?triage=5') });
+    const windowSpy = vi.spyOn(browser.windows, 'create');
+    await openOrFocusDashboard();
+    expect(windowSpy).toHaveBeenCalledTimes(1);
   });
 
   it('focuses the existing dashboard tab instead of creating a duplicate', async () => {

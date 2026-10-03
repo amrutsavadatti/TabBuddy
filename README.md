@@ -30,7 +30,7 @@ and get them back with one click.
 - **Quick links.** A row of circles at the top of the dashboard: your
   three most visited sites (counted on your device, by domain only) and
   three you choose. One click jumps to an open tab or opens the site.
-- **Most used in the popup.** The toolbar popup shows your top 3 most-opened snapshots, one click away.
+- **Most used and search in the popup.** The toolbar popup shows your top 3 most-opened snapshots, one click away, and a search box that finds any snapshot by name.
 - **Categories.** Tag snapshots with any number of categories, then switch
   the dashboard to **Categories** view to see each category as a stack of
   cards. Click a stack to open it, drag cards onto other categories, or
@@ -41,7 +41,7 @@ and get them back with one click.
   dashboard's settings bar.
 - **Tab hoarder nudges.** TabBuddy checks on a schedule you set for tabs
   you've left untouched (you choose what "stale" means), and nudges you to
-  Close, Archive & Close (into a reserved, pinned "Archived" snapshot), or
+  Close, Archive (into a reserved, pinned "Archived" snapshot), or
   Keep (snoozes for 2 days). Set how often and how old is stale, in
   minutes, hours, or days, from the dashboard's settings bar.
 - **Keyboard shortcut.** `Ctrl+Shift+K` (`Cmd+Shift+K` on Mac) opens the
