@@ -218,7 +218,11 @@ export function startAgentBridge(): void {
   const connection = createBridgeConnection({
     isEnabled: getAgentBridgeEnabled,
     hasPermission: () => browser.permissions.contains(NATIVE_MESSAGING_PERMISSION),
-    connect: () => chrome.runtime.connectNative(NATIVE_HOST_NAME) as unknown as NativePort,
+    // The browser polyfill lacks this Chrome-only call, so use the raw global.
+    connect: () =>
+      (globalThis as unknown as { chrome: { runtime: { connectNative(name: string): NativePort } } }).chrome.runtime.connectNative(
+        NATIVE_HOST_NAME,
+      ),
     handle: dispatch,
     setTimer: timers.setTimer,
     clearTimer: timers.clearTimer,

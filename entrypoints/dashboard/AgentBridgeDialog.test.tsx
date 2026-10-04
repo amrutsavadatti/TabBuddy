@@ -2,7 +2,12 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { describeStatus, type BridgeState } from '@/lib/agentBridgeStatus';
-import { AgentBridgeDialog, CONNECT_COMMAND, INSTALL_COMMAND } from './AgentBridgeDialog';
+import {
+  AgentBridgeDialog,
+  CONNECT_COMMAND,
+  CONNECT_COMMAND_CODEX,
+  INSTALL_COMMAND,
+} from './AgentBridgeDialog';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -101,10 +106,33 @@ describe('AgentBridgeDialog', () => {
     expect(button(/check again/i)).toBeUndefined();
   });
 
+  it('hides setup once connected, and shows it open while not connected', async () => {
+    await show({ status: statusFor(true, 'connected') });
+    expect(text()).not.toContain(INSTALL_COMMAND);
+    await click(button(/setup instructions/i));
+    expect(text()).toContain(INSTALL_COMMAND);
+    await act(async () => root!.unmount());
+    root = null;
+    document.body.innerHTML = '';
+
+    await show({ enabled: false, status: statusFor(false) });
+    expect(text()).toContain(INSTALL_COMMAND);
+  });
+
+  it('switches the connect command per AI client', async () => {
+    await show({ enabled: false, status: statusFor(false) });
+    expect(text()).toContain(CONNECT_COMMAND);
+    await click(button(/^Codex\s*$/));
+    expect(text()).toContain(CONNECT_COMMAND_CODEX);
+    expect(text()).not.toContain(CONNECT_COMMAND);
+    await click(button(/Claude Desktop/));
+    expect(text()).toContain('"mcpServers"');
+  });
+
   it('shows both commands and copies the one you ask for', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    await show();
+    await show({ enabled: false, status: statusFor(false) });
     expect(text()).toContain(INSTALL_COMMAND);
     expect(text()).toContain(CONNECT_COMMAND);
     await click(button(new RegExp(`Copy: ${INSTALL_COMMAND}`)));
