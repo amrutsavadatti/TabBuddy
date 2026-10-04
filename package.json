@@ -3,7 +3,7 @@
   "description": "Snapshot and restore browser window tab groups.",
   "license": "MIT",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.0.6",
   "type": "module",
   "scripts": {
     "dev": "wxt",

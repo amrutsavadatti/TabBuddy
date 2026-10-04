@@ -63,7 +63,7 @@ describe('parseImportFile', () => {
     expect(result[0]?.name).toBe('Wrapped');
   });
 
-  it('resets device-specific fields on every imported snapshot', async () => {
+  it('resets device-specific fields but preserves pin state on every imported snapshot', async () => {
     const snapshot = makeSnapshot({
       linkedWindowId: 123,
       usageCount: 50,
@@ -74,8 +74,9 @@ describe('parseImportFile', () => {
     expect(result!.id).not.toBe(snapshot.id);
     expect(result!.linkedWindowId).toBeNull();
     expect(result!.usageCount).toBe(0);
-    expect(result!.pinned).toBe(false);
-    expect(result!.pinnedPosition).toBeNull();
+    // Pin state is preserved so exported pinned snapshots stay pinned on import.
+    expect(result!.pinned).toBe(true);
+    expect(result!.pinnedPosition).toBe(2);
   });
 
   it('renames a snapshot that collides with an existing name', async () => {

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { getHoverPeekEnabled, setHoverPeekEnabled } from './peek';
 
 describe('getHoverPeekEnabled', () => {
-  it('defaults to true when nothing is stored', async () => {
-    expect(await getHoverPeekEnabled()).toBe(true);
+  it('defaults to false when nothing is stored', async () => {
+    expect(await getHoverPeekEnabled()).toBe(false);
   });
 
   it('respects a stored false value', async () => {

@@ -1,4 +1,5 @@
 import type { Category, Snapshot } from './types';
+import type { QuickLinkSlots } from './quickLinkSlots';
 import { getUniqueName } from './names';
 
 interface ExportFile {
@@ -8,6 +9,8 @@ interface ExportFile {
   /** Only the categories the exported snapshots use. Optional so files made
    * before categories existed still import. */
   categories?: Category[];
+  /** The 3 manual quick-link slots. Optional for backwards compatibility. */
+  quickLinkSlots?: QuickLinkSlots;
 }
 
 function slugify(name: string): string {
@@ -17,6 +20,7 @@ function slugify(name: string): string {
 export function downloadSnapshotsAsFile(
   snapshots: Snapshot[],
   categories: Category[] = [],
+  quickLinkSlots?: QuickLinkSlots,
 ): void {
   const used = new Set(snapshots.flatMap((s) => s.categoryIds ?? []));
   const payload: ExportFile = {
@@ -24,6 +28,7 @@ export function downloadSnapshotsAsFile(
     exportedAt: Date.now(),
     snapshots,
     categories: categories.filter((c) => used.has(c.id)),
+    ...(quickLinkSlots !== undefined && { quickLinkSlots }),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: 'application/json',
@@ -64,6 +69,8 @@ export interface ParsedImport {
   /** Categories in the file that don't exist on this device yet. The caller
    * must save these before saving the snapshots that reference them. */
   newCategories: Category[];
+  /** Quick-link slots from the file, or null if the file predates this field. */
+  quickLinkSlots: QuickLinkSlots | null;
 }
 
 /** Parses an imported file, resetting device-specific fields (id, usage,
@@ -84,6 +91,7 @@ export async function parseImportWithCategories(
       ? parsed.snapshots
       : [];
   const rawCategories: unknown[] = Array.isArray(parsed?.categories) ? parsed.categories : [];
+  const rawSlots: unknown = parsed?.quickLinkSlots;
 
   const validSnapshots = rawSnapshots.filter(isValidSnapshotShape);
   if (validSnapshots.length === 0) {
@@ -126,14 +134,26 @@ export async function parseImportWithCategories(
       linkedWindowId: null,
       categoryIds,
       usageCount: 0,
-      pinned: false,
-      pinnedPosition: null,
+      pinned: s.pinned ?? false,
+      pinnedPosition: s.pinnedPosition ?? null,
       createdAt: now,
       updatedAt: now,
     };
   });
 
-  return { snapshots, newCategories };
+  // Validate quick-link slots: must be an array of slot objects or nulls.
+  let quickLinkSlots: QuickLinkSlots | null = null;
+  if (Array.isArray(rawSlots)) {
+    quickLinkSlots = (rawSlots as unknown[]).map((s) => {
+      if (!s || typeof s !== 'object') return null;
+      const slot = s as Record<string, unknown>;
+      return typeof slot.url === 'string' && typeof slot.domain === 'string'
+        ? { url: slot.url, domain: slot.domain }
+        : null;
+    });
+  }
+
+  return { snapshots, newCategories, quickLinkSlots };
 }
 
 export async function parseImportFile(

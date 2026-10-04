@@ -14,7 +14,7 @@ import {
 } from '@/lib/nudgeSettings';
 import { ensureNudgeAlarm, NUDGE_ALARM_NAME } from '@/lib/nudgeAlarm';
 import { AWAY_AFTER_SECONDS, checkNudgeGate, noteReturnedFromAway } from '@/lib/nudgeGate';
-import { clearPendingNudgeFor, presentNextNudge } from '@/lib/nudgePending';
+import { clearPendingNudgeFor, expireIgnoredNudge, presentNextNudge } from '@/lib/nudgePending';
 
 export default defineBackground(() => {
   ensureArchivedSnapshotExists();
@@ -73,11 +73,13 @@ export default defineBackground(() => {
   // path skips the away/quiet gate so it can be tested on demand.
   const scanAndMaybeNudge = async (inactivityThresholdMs?: number) => {
     if (!(await getNudgeEnabled())) return;
+    const intervalMs = (await getNudgeIntervalMinutes()) * 60_000;
     if (inactivityThresholdMs === undefined) {
-      const intervalMs = (await getNudgeIntervalMinutes()) * 60_000;
       const idleState = await browser.idle.queryState(AWAY_AFTER_SECONDS);
       if (!(await checkNudgeGate(idleState, intervalMs))) return;
     }
+    // If the previous nudge was ignored for a full interval, move on.
+    await expireIgnoredNudge(intervalMs);
     const threshold = inactivityThresholdMs ?? (await getNudgeStaleMinutes()) * 60_000;
     const candidates = await runNudgeScan(threshold);
     // Least recently asked first, so a dismissed tab goes to the back of the
