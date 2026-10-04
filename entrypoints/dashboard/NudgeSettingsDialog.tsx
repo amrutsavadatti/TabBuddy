@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bell, BellOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -112,12 +112,18 @@ export function NudgeSettingsDialog({
   const [interval, setInterval] = useState<DraftDuration>(() => toDraft(intervalMinutes));
   const [stale, setStale] = useState<DraftDuration>(() => toDraft(staleMinutes));
 
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
+  // Reseed draft state from props whenever the dialog opens. This handles the
+  // case where the parent opens the dialog before storage has loaded (the lazy
+  // useState initializer only runs once), and also reflects any external change.
+  useEffect(() => {
+    if (open) {
       setInterval(toDraft(intervalMinutes));
       setStale(toDraft(staleMinutes));
       setTab('frequency');
     }
+  }, [open, intervalMinutes, staleMinutes]);
+
+  const handleOpenChange = (next: boolean) => {
     onOpenChange(next);
   };
 

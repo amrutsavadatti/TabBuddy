@@ -121,6 +121,7 @@ import {
   isDomainInOtherSlot,
   normalizeSiteInput,
   setQuickLinkSlot,
+  setAllQuickLinkSlots,
   type QuickLinkSlots,
 } from '@/lib/quickLinkSlots';
 import type { Box } from '@/lib/peekPosition';
@@ -821,7 +822,7 @@ function App() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('mfu');
-  const [hoverPeekEnabled, setHoverPeekEnabledState] = useState(true);
+  const [hoverPeekEnabled, setHoverPeekEnabledState] = useState(false);
   const [lazyRestoreEnabled, setLazyRestoreEnabledState] = useState(true);
   const [quickLinksEnabled, setQuickLinksEnabledState] = useState(true);
   const [agentBridgeEnabled, setAgentBridgeEnabledState] = useState(false);
@@ -1172,14 +1173,15 @@ function App() {
 
   const handleImportFile = async (file: File) => {
     try {
-      const { snapshots: imported, newCategories } = await parseImportWithCategories(
-        file,
-        snapshots.map((s) => s.name),
-        categories,
-      );
+      const { snapshots: imported, newCategories, quickLinkSlots: importedSlots } =
+        await parseImportWithCategories(file, snapshots.map((s) => s.name), categories);
       // Categories first, so no imported snapshot ever points at a missing one.
       await addCategories(newCategories);
       await addSnapshots(imported);
+      if (importedSlots !== null) {
+        await setAllQuickLinkSlots(importedSlots);
+        setQuickSlots(await getQuickLinkSlots());
+      }
       setCategories(await getCategories());
       getSnapshots().then(setSnapshots);
       showToast(`Imported ${imported.length} snapshot${imported.length === 1 ? '' : 's'}`);
@@ -1474,7 +1476,7 @@ function App() {
         onUnhideSite={handleUnhideSite}
         canExport={snapshots.length > 0}
         onExportAll={() => {
-          downloadSnapshotsAsFile(snapshots, categories);
+          downloadSnapshotsAsFile(snapshots, categories, quickSlots);
           showToast(`Exported ${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'}`);
         }}
         onImportFile={handleImportFile}

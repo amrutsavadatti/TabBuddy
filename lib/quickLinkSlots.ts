@@ -57,6 +57,11 @@ export async function getQuickLinkSlots(): Promise<QuickLinkSlots> {
   return normalizeSlots(result[QUICK_LINK_SLOTS_KEY]);
 }
 
+/** Replaces all slots at once (used by import to avoid read-modify-write races). */
+export async function setAllQuickLinkSlots(slots: QuickLinkSlots): Promise<void> {
+  await browser.storage.local.set({ [QUICK_LINK_SLOTS_KEY]: normalizeSlots(slots) });
+}
+
 /** Fills, replaces or (with null) empties one slot. */
 export async function setQuickLinkSlot(index: number, slot: QuickLinkSlot | null): Promise<void> {
   if (!Number.isInteger(index) || index < 0 || index >= SLOT_COUNT) {

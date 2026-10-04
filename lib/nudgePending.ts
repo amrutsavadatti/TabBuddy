@@ -81,6 +81,15 @@ export async function clearPendingNudgeFor(tabId: number): Promise<void> {
   if ((await getPendingNudge())?.tabId === tabId) await clearPendingNudge();
 }
 
+/** If the current pending nudge has been sitting unanswered for longer than
+ * `intervalMs`, expire it so the next scan can move on to a different tab. */
+export async function expireIgnoredNudge(intervalMs: number, now = Date.now()): Promise<void> {
+  const pending = await getPendingNudge();
+  if (pending && now - pending.askedAt >= intervalMs) {
+    await clearPendingNudge();
+  }
+}
+
 /** Asks about the first candidate (callers pass them in the order they want
  * them asked), unless a question is already waiting for an answer. Returns the
  * tab id asked about, or null if nothing was asked. */

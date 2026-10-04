@@ -28,6 +28,30 @@ All notable changes to TabBuddy are listed here, newest first.
   requested only when you turn the agent bridge on; if you never do, nothing
   changes.
 
+## 1.0.6
+
+### Added
+- **Export & import: quick links included.** "Export All" now saves your 3
+  manual quick-link slots alongside snapshots. Importing a file that contains
+  them restores all three at once.
+
+### Changed
+- **Tab nudges: see the tab, then decide.** When a nudge fires, TabBuddy
+  switches to the stale tab first so you can see it, then shows the nudge
+  card in the bottom-right corner on top of it.
+- **Nudges move on if ignored.** If a nudge goes unanswered for a full nudge
+  interval, TabBuddy clears it on the next cycle and moves on to the next
+  stale tab. The ignored tab goes to the back of the queue.
+- **Export & import: pinned snapshots stay pinned.** Snapshots marked as
+  pinned are no longer reset to unpinned when exported and re-imported.
+- **Hover peek is off by default** for new installs and users who haven't
+  explicitly set the preference.
+
+### Fixed
+- **Nudge settings dialog showed defaults after a page refresh.** Opening the
+  dialog now always reflects your actual saved frequency and stale-time
+  values, not the factory defaults.
+
 ## 1.0.5
 
 ### Added
