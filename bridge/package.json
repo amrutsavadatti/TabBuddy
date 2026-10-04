@@ -1,8 +1,8 @@
 {
-  "name": "tabbuddy-bridge",
+  "name": "tabbuddy",
   "description": "Native messaging host and MCP server that connects AI agents to the TabBuddy browser extension.",
   "license": "MIT",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "homepage": "https://github.com/amrutsavadatti/TabBuddy/tree/main/bridge#readme",
   "repository": {
     "type": "git",
@@ -24,7 +24,7 @@
   ],
   "type": "module",
   "bin": {
-    "tabbuddy-bridge": "dist/src/cli.js"
+    "tabbuddy": "dist/src/cli.js"
   },
   "files": [
     "dist",

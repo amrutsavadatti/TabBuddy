@@ -218,7 +218,7 @@ export function startAgentBridge(): void {
   const connection = createBridgeConnection({
     isEnabled: getAgentBridgeEnabled,
     hasPermission: () => browser.permissions.contains(NATIVE_MESSAGING_PERMISSION),
-    connect: () => browser.runtime.connectNative(NATIVE_HOST_NAME) as unknown as NativePort,
+    connect: () => chrome.runtime.connectNative(NATIVE_HOST_NAME) as unknown as NativePort,
     handle: dispatch,
     setTimer: timers.setTimer,
     clearTimer: timers.clearTimer,

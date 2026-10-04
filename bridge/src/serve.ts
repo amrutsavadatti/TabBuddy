@@ -29,7 +29,7 @@ import { registerPrompts } from './prompts.js';
 import { socketPath } from './paths.js';
 
 /** Keep in step with package.json (a test checks). */
-export const SERVER_VERSION = '0.1.0';
+export const SERVER_VERSION = '0.0.1';
 
 /** Shown to the model when it connects. */
 export const SERVER_INSTRUCTIONS =

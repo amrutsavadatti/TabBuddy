@@ -19,18 +19,18 @@ import { fileLogger } from './logger.js';
 import { bridgeDir, logPath, socketPath } from './paths.js';
 import { runServe } from './serve.js';
 
-const USAGE = `tabbuddy-bridge — connects AI agents to the TabBuddy extension
+const USAGE = `tabbuddy — connects AI agents to the TabBuddy extension
 
 Usage:
-  tabbuddy-bridge serve             MCP server over stdio (your AI client starts this)
-  tabbuddy-bridge host              Native messaging host (the browser starts this)
-  tabbuddy-bridge ping              Ask the extension for its version
-  tabbuddy-bridge call <method> [json]
-                                    Send any request and print the result
-  tabbuddy-bridge install [--extension-id ID]... [--browser chrome|brave|edge|chromium]...
-                                    Register the host with your browsers (macOS, Linux, Windows)
-  tabbuddy-bridge uninstall         Remove what install wrote
-  tabbuddy-bridge doctor            Check the setup, stopping at the first problem
+  tabbuddy serve             MCP server over stdio (your AI client starts this)
+  tabbuddy host              Native messaging host (the browser starts this)
+  tabbuddy ping              Ask the extension for its version
+  tabbuddy call <method> [json]
+                             Send any request and print the result
+  tabbuddy install [--extension-id ID]... [--browser chrome|brave|edge|chromium]...
+                             Register the host with your browsers (macOS, Linux, Windows)
+  tabbuddy uninstall         Remove what install wrote
+  tabbuddy doctor            Check the setup, stopping at the first problem
 `;
 
 async function runHost(): Promise<void> {
@@ -106,7 +106,7 @@ function runInstall(args: string[]): void {
     return;
   }
   out('\nNext: restart your browser, then switch on Agent bridge in TabBuddy (Settings → Automation).');
-  out('Then run `tabbuddy-bridge doctor` to check everything.');
+  out('Then run `tabbuddy doctor` to check everything.');
   const env = installEnv();
   out('\nTo give Claude Code access, run:');
   out(`  ${mcpAddCommand(env)}`);
@@ -114,7 +114,7 @@ function runInstall(args: string[]): void {
     out(
       '\nWarning: this copy of the bridge lives in the npx cache, which npm cleans up from time to time, ' +
         'and the browser would then fail to start it. For a lasting setup run:\n' +
-        '  npm install -g tabbuddy-bridge && tabbuddy-bridge install',
+        '  npm install -g tabbuddy && tabbuddy install',
     );
   }
 }
@@ -155,7 +155,7 @@ async function main(argv: string[]): Promise<void> {
     case 'doctor':
       return runDoctorCommand();
     case 'call':
-      if (!rest[0]) throw new Error('Usage: tabbuddy-bridge call <method> [json]');
+      if (!rest[0]) throw new Error('Usage: tabbuddy call <method> [json]');
       return runCall(rest[0], rest[1]);
     default:
       process.stderr.write(USAGE);
